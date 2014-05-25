@@ -41,6 +41,11 @@
 
 /* protos */
 
+#undef B0
+#undef AAD
+#undef PN
+#undef A
+
 int wpa_ccmp_decrypt(u_char *mac, u_char *data, size_t len, struct wpa_sa sa);
 static inline void get_PN(u_char *PN, u_char *data);
 static inline void get_B0(u_char *B0, u_char *mac, u_char *PN, size_t len);
