@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_http.c,v 1.20 2004/06/25 14:24:29 alor Exp $
 */
 
 #include <ec.h>
@@ -90,19 +89,20 @@ static SLIST_HEAD(, http_field_entry) http_fields[2];
 /* protos */
 FUNC_DECODER(dissector_http);
 void http_init(void);
-static void Parse_Method_Get(u_char *ptr, struct packet_object *po);
-static void Parse_Method_Post(u_char *ptr, struct packet_object *po);
-static void Decode_Url(u_char *src);
-static int Check_CONNECT(u_char *ptr, struct packet_object *po);
-static void Find_Url(u_char *to_parse, char **ret);
-static void Find_Url_Referer(u_char *to_parse, char **ret);
-static void Parse_Post_Payload(u_char *ptr, struct http_status *conn_status, struct packet_object *po);
+static void Parse_Method_Get(char *ptr, struct packet_object *po);
+static void Parse_Method_Post(char *ptr, struct packet_object *po);
+static void Decode_Url(char *src);
+static int Check_CONNECT(char *ptr, struct packet_object *po);
+static void Find_Url(char *to_parse, char **ret);
+static void Find_Url_Referer(char *to_parse, char **ret);
+static void Parse_Post_Payload(char *ptr, struct http_status *conn_status, struct packet_object *po);
 static void Print_Pass(struct packet_object *po);
-static void Get_Banner(u_char *ptr, struct packet_object *po);
-static u_char Parse_Form(u_char *to_parse, char **ret, int mode);
+static void Get_Banner(char *ptr, struct packet_object *po);
+static u_char Parse_Form(char *to_parse, char **ret, int mode);
 static int Parse_Passport_Auth(char *ptr, char *from_here, struct packet_object *po);
 static int Parse_NTLM_Auth(char *ptr, char *from_here, struct packet_object *po);
 static int Parse_Basic_Auth(char *ptr, char *from_here, struct packet_object *po);
+static int Parse_User_Agent(char *ptr, char *end, char *from_here, struct packet_object *po);
 static char *unicodeToString(char *p, size_t len);
 static void dumpRaw(char *str, unsigned char *buf, size_t len);
 int http_fields_init(void);
@@ -145,7 +145,7 @@ FUNC_DECODER(dissector_http)
       return NULL;
 
    /* XXX - This way we won't catch ProxyAuth on CONNECT */
-   if (Check_CONNECT(ptr, PACKET))
+   if (Check_CONNECT((char*)ptr, PACKET))
       return NULL;         
 
    /* HOOK POINT: HOOK_PROTO_HTTP */
@@ -158,16 +158,18 @@ FUNC_DECODER(dissector_http)
       /* Check Proxy or WWW auth first
        * then password in the GET or POST.
        */
-      if ((from_here = strstr(ptr, "Authorization: Passport")) && 
-         Parse_Passport_Auth(ptr, from_here + strlen("Authorization: Passport"), PACKET));       
-      else if ((from_here = strstr(ptr, ": NTLM ")) && 
-         Parse_NTLM_Auth(ptr, from_here + strlen(": NTLM "), PACKET));
-      else if ((from_here = strstr(ptr, ": Basic ")) &&
-         Parse_Basic_Auth(ptr, from_here  + strlen(": Basic "), PACKET));
-      else if (!strncmp(ptr, "GET ", 4))
-         Parse_Method_Get(ptr + strlen("GET "), PACKET);
-      else if (!strncmp(ptr, "POST ", 5))
-         Parse_Method_Post(ptr + strlen("POST "), PACKET);
+      if ((from_here = strstr((const char*)ptr, "Authorization: Passport")) && 
+         Parse_Passport_Auth((char*)ptr, from_here + strlen("Authorization: Passport"), PACKET));       
+      else if ((from_here = strstr((const char*)ptr, ": NTLM ")) && 
+         Parse_NTLM_Auth((char*)ptr, from_here + strlen(": NTLM "), PACKET));
+      else if ((from_here = strstr((const char*)ptr, ": Basic ")) &&
+         Parse_Basic_Auth((char*)ptr, from_here  + strlen(": Basic "), PACKET));
+      else if ((from_here = strstr((const char*)ptr, "User-Agent: ")) &&
+          Parse_User_Agent((char*)ptr, end, from_here + strlen("User-Agent: "), PACKET));
+      else if (!strncmp((const char*)ptr, "GET ", 4))
+         Parse_Method_Get((char*)ptr + strlen("GET "), PACKET);
+      else if (!strncmp((const char*)ptr, "POST ", 5))
+         Parse_Method_Post((char*)ptr + strlen("POST "), PACKET);
       else {
          dissect_create_ident(&ident, PACKET, DISSECT_CODE(dissector_http));
          if (session_get(&s, ident, DISSECT_IDENT_LEN) == ESUCCESS) {
@@ -176,13 +178,13 @@ FUNC_DECODER(dissector_http)
             /* Are we waiting for post termination? */
             if (conn_status->c_status == POST_WAIT_DELIMITER ||
                 conn_status->c_status == POST_LAST_CHANCE)
-               Parse_Post_Payload(ptr, conn_status, PACKET);
+               Parse_Post_Payload((char*)ptr, conn_status, PACKET);
          }
          SAFE_FREE(ident);
       } 	 
    } else { /* Server Replies */
-      if (!strncmp(ptr, "HTTP", 4)) {
-         Get_Banner(ptr, PACKET);
+      if (!strncmp((const char*)ptr, "HTTP", 4)) {
+         Get_Banner((char*)ptr, PACKET);
 
          /* Since the server replies there's no need to
           * wait for POST termination or client response
@@ -194,8 +196,8 @@ FUNC_DECODER(dissector_http)
           * packet as HTTP header? Otherwise put these lines
           * out from the if (decrease performances, checks all pcks)
           */
-         if ((from_here = strstr(ptr, ": NTLM "))) 
-            Parse_NTLM_Auth(ptr, from_here + strlen(": NTLM "), PACKET);
+         if ((from_here = strstr((const char*)ptr, ": NTLM "))) 
+            Parse_NTLM_Auth((char*)ptr, from_here + strlen(": NTLM "), PACKET);
       }
    }
 
@@ -203,7 +205,7 @@ FUNC_DECODER(dissector_http)
 }
 
 /* Set the SSL flag (for ssl wrapper) when the CONNECT is finished */
-static int Check_CONNECT(u_char *ptr, struct packet_object *po)
+static int Check_CONNECT(char *ptr, struct packet_object *po)
 {
    void *ident = NULL;
    struct ec_session *s = NULL;
@@ -245,7 +247,7 @@ static int Check_CONNECT(u_char *ptr, struct packet_object *po)
 }
 
 /* Get the server banner from the headers */       
-static void Get_Banner(u_char *ptr, struct packet_object *po)
+static void Get_Banner(char *ptr, struct packet_object *po)
 {
    char *start, *end;
    u_int32 len;
@@ -315,7 +317,8 @@ static int Parse_Passport_Auth(char *ptr, char *from_here, struct packet_object 
 static int Parse_Basic_Auth(char *ptr, char *from_here, struct packet_object *po)
 {
    int Proxy_Auth = 0;
-   char *token, *to_decode, *tok;
+   char *to_decode, *tok;
+   char *user, *pass;
 
    DEBUG_MSG("HTTP --> dissector http (Basic Auth)");
 
@@ -334,26 +337,98 @@ static int Parse_Basic_Auth(char *ptr, char *from_here, struct packet_object *po
       return 1;
        
    ec_strtok(to_decode, "\r", &tok);
+
    base64_decode(to_decode, to_decode);
-   
+  
+   DEBUG_MSG("Clear text AUTH: %s", to_decode); 
+
+   /* clear text should be username:password 
+    * this means that we must find the first instance of :
+    * token shoul dbe username, and decoded should just be the password
+    */
    /* Parse the cleartext auth string */
-   if ( (token = strsep(&to_decode, ":")) != NULL) {
-      po->DISSECTOR.user = strdup(token);
-      if ( (token = strsep(&to_decode, ":")) != NULL) {
-         po->DISSECTOR.pass = strdup(token);
-      
-         /* Are we authenticating to the proxy or to a website? */
-         if (Proxy_Auth)
-            po->DISSECTOR.info = strdup("Proxy Authentication");
-         else 
-            Find_Url(ptr, &(po->DISSECTOR.info));
-	    
-         Print_Pass(po);
-      }
+  
+
+   pass = NULL;
+
+   user = ec_strtok(to_decode, ":", &pass); 
+
+   if (pass != NULL && user != NULL) {
+      po->DISSECTOR.user = strdup(user);
+      po->DISSECTOR.pass = strdup(pass);	
+ 
+      /* Are we authenticating to the proxy or to a website? */
+      if (Proxy_Auth)
+         po->DISSECTOR.info = strdup("Proxy Authentication");
+      else 
+         Find_Url(ptr, &(po->DISSECTOR.info));
+   
+      Print_Pass(po);
    }
 
    SAFE_FREE(to_decode);
    return 1;
+}
+
+static int Parse_User_Agent(char* ptr, char* end, char *from_here, struct packet_object *po)
+{
+    // find the end of the line
+    const char* line_end = (const char*)memchr(from_here, '\n', end - from_here);
+    if (line_end == NULL) {
+        return 0;
+    }
+
+    unsigned int line_length = line_end - from_here;
+    const char* comment_begin = (const char*)memchr(from_here, '(', line_length);
+    if (comment_begin == NULL || ((comment_begin + 1) >= end)) {
+        // no comments found
+        return 0;
+    }
+    ++comment_begin;
+
+    const char* comment_end = (const char*)memchr(comment_begin, ')', line_end - comment_begin);
+    if (comment_end == NULL) {
+        // couldn't find the close on the comment
+        return 0;
+    }
+
+    const char* os = NULL;
+    while (os == NULL && comment_begin != NULL) {
+        unsigned int comment_length = comment_end - comment_begin;
+        if ((comment_length > 10 && strncmp(comment_begin, "Windows NT", 10) == 0) ||
+            (comment_length > 9 && strncmp(comment_begin, "Intel Mac", 9) == 0) ||
+            (comment_length > 7 && strncmp(comment_begin, "PPC Mac", 7) == 0) ||
+            (comment_length > 10 && strncmp(comment_begin, "CPU iPhone", 10) == 0) ||
+            (comment_length > 8 && strncmp(comment_begin, "Android", 7) == 0) ||
+            (comment_length > 5 && strncmp(comment_begin, "CrOS", 4) == 0) || // Chrome OS
+            (comment_length > 5 && strncmp(comment_begin, "Linux", 5) == 0)) {
+            os = comment_begin;
+        }
+
+        if (os == NULL) {
+            comment_begin = memchr(comment_begin, ';', comment_end - comment_begin);
+            if (comment_begin != NULL && ((comment_begin + 2) < comment_end)) {
+                // skip the ; and the ' '
+                comment_begin += 2;
+            }
+            else
+            {
+            	comment_begin = NULL;
+            }
+        } else {
+            const char* the_end = memchr(comment_begin, ';', comment_end - comment_begin);
+            if (the_end != NULL) {
+                comment_end = the_end;
+            }
+
+            SAFE_CALLOC(po->DISSECTOR.os, 1, (comment_end - os) + 1);
+            memcpy(po->DISSECTOR.os, os, comment_end - os);
+            po->DISSECTOR.os[comment_end - os] = 0;
+        }
+    }
+
+    // always return 0 so the main loop drops down to get/post
+    return 0;
 }
 
 /* Parse NTLM challenge and response for both Proxy and WWW Auth */ 
@@ -401,7 +476,7 @@ static int Parse_NTLM_Auth(char *ptr, char *from_here, struct packet_object *po)
       SAFE_CALLOC(s->data, 1, sizeof(struct http_status));                  
       conn_status = (struct http_status *) s->data;
       conn_status->c_status = NTLM_WAIT_RESPONSE;
-      dumpRaw(conn_status->c_data, challenge_struct->challengeData, 8);
+      dumpRaw((char*)conn_status->c_data, challenge_struct->challengeData, 8);
       session_put(s);
 
    } else if (msgType==3) {   
@@ -423,7 +498,7 @@ static int Parse_NTLM_Auth(char *ptr, char *from_here, struct packet_object *po)
             response_struct  = (tSmbNtlmAuthResponse *) to_decode;
             po->DISSECTOR.user = strdup(GetUnicodeString(response_struct, uUser));
             SAFE_CALLOC(po->DISSECTOR.pass, strlen(po->DISSECTOR.user) + 150, sizeof(char));
-            sprintf(po->DISSECTOR.pass, "(NTLM) %s:\"\":\"\":", po->DISSECTOR.user);
+            snprintf(po->DISSECTOR.pass, strlen(po->DISSECTOR.user) + 150, "(NTLM) %s:\"\":\"\":", po->DISSECTOR.user);
             outstr = po->DISSECTOR.pass + strlen(po->DISSECTOR.pass);
             dumpRaw(outstr,((unsigned char*)response_struct)+IVAL(&response_struct->lmResponse.offset,0), 24);	    	 
             outstr[48] = ':';
@@ -431,7 +506,7 @@ static int Parse_NTLM_Auth(char *ptr, char *from_here, struct packet_object *po)
             dumpRaw(outstr,((unsigned char*)response_struct)+IVAL(&response_struct->ntResponse.offset,0), 24);	       	    
             outstr[48] = ':';
             outstr += 49;
-            strcat(po->DISSECTOR.pass, conn_status->c_data);
+            strcat(po->DISSECTOR.pass, (const char*)conn_status->c_data);
 
             /* Are we authenticating to the proxy or to a website? */
             if (Proxy_Auth)
@@ -451,9 +526,10 @@ static int Parse_NTLM_Auth(char *ptr, char *from_here, struct packet_object *po)
 
 
 /* Deal with POST continuation */
-static void Parse_Post_Payload(u_char *ptr, struct http_status *conn_status, struct packet_object *po)
+static void Parse_Post_Payload(char *ptr, struct http_status *conn_status, struct packet_object *po)
 { 
    char *user=NULL, *pass=NULL;
+   u_char user_res, pass_res;
 
    DEBUG_MSG("HTTP - Parse First chance");
    
@@ -466,20 +542,25 @@ static void Parse_Post_Payload(u_char *ptr, struct http_status *conn_status, str
    if (conn_status->c_status == POST_LAST_CHANCE) {
    DEBUG_MSG("HTTP - Parse Form");
 
-      if (Parse_Form(ptr, &user, USER) && Parse_Form(ptr, &pass, PASS)) {
+      user_res= Parse_Form(ptr, &user, USER);
+      pass_res= Parse_Form(ptr, &pass, PASS);
+      if (user_res || pass_res) {
          po->DISSECTOR.user = user;
          po->DISSECTOR.pass = pass;
-         po->DISSECTOR.info = strdup(conn_status->c_data);
+         po->DISSECTOR.content = strdup((const char*) ptr);
+         po->DISSECTOR.info = strdup((const char*)conn_status->c_data);
          dissect_wipe_session(po, DISSECT_CODE(dissector_http));
          Print_Pass(po);
-      } else
+      } else {
          SAFE_FREE(user);
+         SAFE_FREE(pass);
+      }
    }
 }
 
 
 /* Parse the POST header */
-static void Parse_Method_Post(u_char *ptr, struct packet_object *po) 
+static void Parse_Method_Post(char *ptr, struct packet_object *po) 
 {
    char *url = NULL;
    struct ec_session *s = NULL;
@@ -497,7 +578,7 @@ static void Parse_Method_Post(u_char *ptr, struct packet_object *po)
    SAFE_CALLOC(s->data, 1, sizeof(struct http_status));                  
    conn_status = (struct http_status *) s->data;
    conn_status->c_status = POST_WAIT_DELIMITER;
-   strlcpy(conn_status->c_data, url, sizeof(conn_status->c_data));
+   strlcpy((char*)conn_status->c_data, url, sizeof(conn_status->c_data));
    session_put(s);
 
    Parse_Post_Payload(ptr, conn_status, po);
@@ -507,10 +588,10 @@ static void Parse_Method_Post(u_char *ptr, struct packet_object *po)
 
 
 /* Search for passwords in the URL */
-static void Parse_Method_Get(u_char *ptr, struct packet_object *po) 
+static void Parse_Method_Get(char *ptr, struct packet_object *po) 
 {
-   u_char *to_parse = NULL;
-   u_char *delimiter = NULL;
+   char *to_parse = NULL;
+   char *delimiter = NULL;
    char *user = NULL;
    char *pass = NULL;
    
@@ -549,9 +630,9 @@ http_get_failure:
 
 
 /* Match users or passwords in a string */
-static u_char Parse_Form(u_char *to_parse, char **ret, int mode)
+static u_char Parse_Form(char *to_parse, char **ret, int mode)
 {
-   u_char *q;
+   char *q;
    struct http_field_entry *d;
 
    /* Strip the '?' from a GET method */
@@ -580,7 +661,7 @@ static u_char Parse_Form(u_char *to_parse, char **ret, int mode)
             if ((q = strchr(*ret, '&')))
                *q = 0; 
 
-            Decode_Url((u_char *)*ret);
+            Decode_Url(*ret);
             return 1;
          }
       } while ( (q = strchr(q, '&')) );
@@ -591,9 +672,9 @@ static u_char Parse_Form(u_char *to_parse, char **ret, int mode)
 
 
 /* Unescape the string */
-static void Decode_Url(u_char *src)
+static void Decode_Url(char *src)
 {
-   u_char t[3];
+   char t[3];
    u_int32 i, j, ch;
 
    /* Paranoid test */
@@ -601,7 +682,7 @@ static void Decode_Url(u_char *src)
       return;
       
    /* NULL terminate for the strtoul */
-   t[3] = 0;
+   t[2] = 0;
    
    for (i=0, j=0; src[i] != 0; i++, j++) {
       ch = (u_int32)src[i];
@@ -610,16 +691,16 @@ static void Decode_Url(u_char *src)
          ch = strtoul(t, NULL, 16);
          i += 2;
       }
-      src[j] = (u_char)ch;
+      src[j] = (char)ch;
    }
    src[j] = 0;
 }
 
 
 /* Gets the URL from the headers */
-static void Find_Url_Referer(u_char *to_parse, char **ret) 
+static void Find_Url_Referer(char *to_parse, char **ret) 
 {
-   u_char *fromhere, *page=NULL, *host=NULL;     
+   char *fromhere, *page=NULL, *host=NULL;     
    u_int32 len;
    char *tok;
 
@@ -641,20 +722,20 @@ static void Find_Url_Referer(u_char *to_parse, char **ret)
 	 
       len = strlen(page) + strlen(host) + 2;
       SAFE_CALLOC(*ret, len, sizeof(char));
-      sprintf(*ret, "%s%s", host, page);
+      snprintf(*ret, len, "%s%s", host, page);
 
       SAFE_FREE(page);
       SAFE_FREE(host);            
    }    
    
-   Decode_Url((u_char *)*ret);
+   Decode_Url(*ret);
 }
 
 
 /* Gets the URL from the request */
-static void Find_Url(u_char *to_parse, char **ret) 
+static void Find_Url(char *to_parse, char **ret) 
 {
-   u_char *fromhere, *page=NULL, *host=NULL;     
+   char *fromhere, *page=NULL, *host=NULL;     
    u_int32 len;
    char *tok;
 
@@ -678,12 +759,12 @@ static void Find_Url(u_char *to_parse, char **ret)
 	 
    len = strlen(page) + strlen(host) + 2;
    SAFE_CALLOC(*ret, len, sizeof(char));
-   sprintf(*ret, "%s%s", host, page);
+   snprintf(*ret, len, "%s%s", host, page);
 
    SAFE_FREE(page);
    SAFE_FREE(host);            
        
-   Decode_Url((u_char *)*ret);
+   Decode_Url(*ret);
 }
 
 /* Print the passwords from the PO */
@@ -702,6 +783,9 @@ static void Print_Pass(struct packet_object *po)
                                                                  po->DISSECTOR.user,
                                                                  po->DISSECTOR.pass,
                                                                  po->DISSECTOR.info);
+
+   if (po->DISSECTOR.content)
+    DISSECT_MSG("CONTENT: %s\n\n", po->DISSECTOR.content);
 }
 
 
@@ -717,7 +801,7 @@ int http_fields_init(void)
    /* open the file */
    f = open_data("share", ETTER_FIELDS, FOPEN_READ_TEXT);
    if (f == NULL) {
-      USER_MSG("Cannot open %s", ETTER_FIELDS);
+      USER_MSG("Cannot open %s\n", ETTER_FIELDS);
       return -EINVALID;
    }
          
@@ -771,7 +855,7 @@ static void dumpRaw(char *str, unsigned char *buf, size_t len)
    u_int32 i;
 
    for (i=0; i<len; ++i, str+=2)
-      sprintf(str, "%02x", buf[i]);
+      snprintf(str, 3, "%02x", buf[i]);
 }
 
 /* A little helper function */
@@ -780,7 +864,7 @@ static char *unicodeToString(char *p, size_t len)
    u_int32 i;
    static char buf[1024];
 
-   /* A string longer than 1024 chars???...it's a bougs packet */
+   /* A string longer than 1024 chars???...it's a bogus packet */
    for (i=0; i<len && i<1023; ++i) {
       buf[i] = *p & 0x7f;
       p += 2;

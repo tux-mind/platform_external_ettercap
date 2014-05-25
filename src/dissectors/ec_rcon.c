@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_rcon.c,v 1.3 2004/06/25 14:24:29 alor Exp $
 */
 
 #include <ec.h>
@@ -69,7 +68,7 @@ FUNC_DECODER(dissector_rcon)
 
    ptr += 4;
    
-   if ( !strncasecmp(ptr, "rcon", 4)  ) {
+   if ( !strncasecmp((const char*)ptr, "rcon", 4)  ) {
       
       u_char *q;
       
@@ -94,10 +93,10 @@ FUNC_DECODER(dissector_rcon)
       PACKET->DISSECTOR.user = strdup("RCON");
 
       SAFE_CALLOC(PACKET->DISSECTOR.pass, q - ptr + 1, sizeof(char));
-      strlcpy(PACKET->DISSECTOR.pass, ptr, q - ptr + 1);
+      strlcpy(PACKET->DISSECTOR.pass, (const char*)ptr, q - ptr + 1);
 
-      SAFE_CALLOC(PACKET->DISSECTOR.info, strlen(q) + 1, sizeof(char));
-      sprintf(PACKET->DISSECTOR.info, "%s", q);
+      SAFE_CALLOC(PACKET->DISSECTOR.info, strlen((const char*)q) + 1, sizeof(char));
+      snprintf(PACKET->DISSECTOR.info, strlen((const char*)q) + 1, "%s", q);
 
       DISSECT_MSG("RCON : %s:%d -> AUTHKEY: %s  COMMAND: %s\n", ip_addr_ntoa(&PACKET->L3.dst, tmp),
                                     ntohs(PACKET->L4.dst), 

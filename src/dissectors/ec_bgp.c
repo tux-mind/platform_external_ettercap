@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_bgp.c,v 1.10 2004/05/06 16:20:45 alor Exp $
 */
 
 /*
@@ -122,15 +121,15 @@ FUNC_DECODER(dissector_bgp)
    char tmp[MAX_ASCII_ADDR_LEN];
    u_char *parameters;
    u_char param_length;
-   u_int16 i;
+   u_int32 i;
    u_char BGP_MARKER[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                           0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
    /* don't complain about unused var */
    (void)end;
    
-   /* skip empty packets (ACK packets) */
-   if (PACKET->DATA.len == 0)
+   /* skip packets that don't have enough data */
+   if (PACKET->DATA.len < 30)
       return NULL;
 
    /* not the right version (4) */
@@ -152,6 +151,9 @@ FUNC_DECODER(dissector_bgp)
    /* skip to parameters */
    parameters = ptr + 29;
 
+   if ((ptr + param_length) > end)
+      return 0;
+
    DEBUG_MSG("BGP --> TCP dissector_bgp");
 
    /* move through the param list */
@@ -159,25 +161,30 @@ FUNC_DECODER(dissector_bgp)
 
       /* the parameter is an authentication type (1) */
       if (parameters[i] == 1) {
-         u_char j, *str_ptr;
-         u_int32 len = parameters[i + 1];
+         char *str_ptr;
+         u_int32 j;
+         u_int32 length = parameters[i + 1];
         
          DEBUG_MSG("\tDissector_BGP 4 AUTH");
          
          PACKET->DISSECTOR.user = strdup("BGP4");
-         SAFE_CALLOC(PACKET->DISSECTOR.pass, len * 3 + 10, sizeof(char));
+         SAFE_CALLOC(PACKET->DISSECTOR.pass, length * 3 + 10, sizeof(char));
          SAFE_CALLOC(PACKET->DISSECTOR.info, 32, sizeof(char));
 
          /* Get authentication type */
-         sprintf(PACKET->DISSECTOR.info, "AUTH TYPE [0x%02x]", parameters[i+2]);
+         snprintf(PACKET->DISSECTOR.info, 32, "AUTH TYPE [0x%02x]", parameters[i+2]);
          
          /* Get authentication data */
-         if (len > 1) {
-            sprintf(PACKET->DISSECTOR.pass,"Hex(");
+         if (length > 1) {
+            snprintf(PACKET->DISSECTOR.pass, 4, "Hex(");
             str_ptr = PACKET->DISSECTOR.pass + strlen(PACKET->DISSECTOR.pass);
-            
-            for (j = 0; j < (len-1); j++)
-               sprintf(str_ptr + (j * 3), " %.2x", parameters[i + 3 + j]);
+
+            for (j = 0; j < (length-1); j++) {
+               //u_int32 k = j+3;
+               u_char *temp = parameters + i + j + 3;
+               size_t temp_len = strlen((char *)temp) + 2;
+               snprintf(str_ptr + (j * 3), temp_len, " %.2x", *temp);
+            }
          
             strcat(str_ptr, " )");
          }	 

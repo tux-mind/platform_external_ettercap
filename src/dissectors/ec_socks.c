@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_socks.c,v 1.7 2004/01/21 20:20:07 alor Exp $
 */
 
 #include <ec.h>
@@ -74,7 +73,7 @@ FUNC_DECODER(dissector_socks)
       PACKET->DISSECTOR.banner = strdup("socks v5");
 
       /* If the server didn't accepted user/pass scheme */
-      if (ptr[1] != USER_PASS || ptr[1] != NO_AUTH) 
+      if (ptr[1] != USER_PASS && ptr[1] != NO_AUTH) 
          return NULL;
     
       dissect_create_ident(&ident, PACKET, DISSECT_CODE(dissector_socks));

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_dhcp.c,v 1.11 2004/05/26 09:13:48 alor Exp $
 */
 
 /*
@@ -153,12 +152,17 @@ FUNC_DECODER(dissector_dhcp)
             DEBUG_MSG("\tDissector_DHCP REQUEST");
       
             /* requested ip address */
-            if ((opt = get_dhcp_option(DHCP_OPT_RQ_ADDR, options, end)) != NULL)
+            if ((opt = get_dhcp_option(DHCP_OPT_RQ_ADDR, options, end)) != NULL) {
+               if ((opt + 5) >= end) {
+                   // not enough room for an ip address
+                   return NULL;
+               }
                ip_addr_init(&client, AF_INET, opt + 1);
+            }
             else {
                /* search if the client already has the ip address */
                if (dhcp->ciaddr != 0) {
-                  ip_addr_init(&client, AF_INET, (char *)&dhcp->ciaddr);
+                  ip_addr_init(&client, AF_INET, (u_char *)&dhcp->ciaddr);
                } else
                   return NULL;
             }
@@ -200,10 +204,12 @@ FUNC_DECODER(dissector_dhcp)
             if (resp == DHCP_ACK)
                DEBUG_MSG("\tDissector_DHCP ACK");
             else
+            {
                DEBUG_MSG("\tDissector_DHCP OFFER");
+            }
    
             /* get the assigned ip */
-            ip_addr_init(&client, AF_INET, (char *)&dhcp->yiaddr );
+            ip_addr_init(&client, AF_INET, (u_char *)&dhcp->yiaddr );
             
             /* netmask */
             if ((opt = get_dhcp_option(DHCP_OPT_NETMASK, options, end)) != NULL)
@@ -227,7 +233,7 @@ FUNC_DECODER(dissector_dhcp)
 
             /* dns domain */
             if ((opt = get_dhcp_option(DHCP_OPT_DOMAIN, options, end)) != NULL) {
-                  strncpy(domain, opt + 1, MIN(*opt, sizeof(domain)) );
+                  strncpy(domain, (const char*)(opt + 1), MIN(*opt, sizeof(domain)) );
             
                DISSECT_MSG("\"%s\"\n", domain);
             } else
@@ -239,11 +245,40 @@ FUNC_DECODER(dissector_dhcp)
             
             if (!ip_addr_is_zero(&dns))
                dhcp_add_profile(&dns, FP_UNKNOWN);
-            
+
+            // look for the option 81 in ack's
+            if (resp == DHCP_ACK &&
+                (opt = get_dhcp_option(DHCP_OPT_FQDN, options, end)) != NULL)
+            {
+                u_char size = opt[0];
+                if ((opt + size + 2) > end)
+                {
+                    // the +2 accounts for a-rr and ptr-rr
+                    return NULL;
+                }
+
+                // check flags for the ascii encoding
+                u_char flags = opt[1];
+                if (flags & 0x04)
+                {
+                    // TODO support wire format (aka dns style)
+                    return NULL;
+                }
+
+                // create a null terminated string to pass to resolv
+                char* name = NULL;
+                SAFE_CALLOC(name, size - 2, sizeof(char));
+                memcpy(name, opt + 4, size - 2);
+                name[size - 3] = 0;
+
+                resolv_cache_insert(&client, name);
+
+                SAFE_FREE(name);
+            }
             break;
       }
    }
-      
+
    return NULL;
 }
 
@@ -268,7 +303,7 @@ u_int8 * get_dhcp_option(u_int8 opt, u_int8 *ptr, u_int8 *end)
        */
       ptr = ptr + 2 + (*(ptr + 1));
 
-   } while (*ptr != DHCP_OPT_END && ptr < end);
+   } while (ptr < end && *ptr != DHCP_OPT_END);
    
    return NULL;
 }

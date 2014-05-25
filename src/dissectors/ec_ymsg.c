@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_ymsg.c,v 1.6 2004/06/25 14:24:29 alor Exp $
 */
 
 #include <ec.h>
@@ -142,11 +141,11 @@ FUNC_DECODER(dissector_ymsg)
       memcpy(message, ptr, field_len);
       
       /* Update disp_data in the packet object (128 byte will be enough for ****YAHOOO.... string */
-      temp_disp_data = (u_char *)realloc(PACKET->DATA.disp_data, strlen(from) + strlen(to) + strlen(message) + 128);
+      temp_disp_data = (u_char *)realloc(PACKET->DATA.disp_data, strlen((const char*)from) + strlen((const char*)to) + strlen((const char*)message) + 128);
       if (temp_disp_data != NULL) {
          PACKET->DATA.disp_data = temp_disp_data;
-         sprintf(PACKET->DATA.disp_data, "*** Yahoo Message ***\n From: %s\n To: %s\n\n Message: %s\n", from, to, message); 		  	       
-         PACKET->DATA.disp_len = strlen(PACKET->DATA.disp_data);
+         snprintf((char*)PACKET->DATA.disp_data, strlen((const char*)from) + strlen((const char*)to) + strlen((const char*)message) + 128, "*** Yahoo Message ***\n From: %s\n To: %s\n\n Message: %s\n", from, to, message); 		  	       
+         PACKET->DATA.disp_len = strlen((const char*)PACKET->DATA.disp_data);
       }
             
       SAFE_FREE(from);

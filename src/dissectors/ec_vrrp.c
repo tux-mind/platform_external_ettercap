@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_vrrp.c,v 1.3 2003/10/28 22:15:04 alor Exp $
 */
 
 /*
@@ -94,7 +93,7 @@ FUNC_DECODER(dissector_vrrp)
    DECLARE_DISP_PTR_END(ptr, end);
    char tmp[MAX_ASCII_ADDR_LEN];
    struct vrrp_hdr *vhdr;
-   char *auth;
+   u_char *auth;
 
    /* don't complain about unused var */
    (void)end;

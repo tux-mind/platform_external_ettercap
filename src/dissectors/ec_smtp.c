@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_smtp.c,v 1.6 2004/06/25 14:24:29 alor Exp $
 */
 
 #include <ec.h>
@@ -64,11 +63,11 @@ FUNC_DECODER(dissector_smtp)
        * get the banner 
        * ptr + 4 to skip the initial 220 response
        */
-      if (!strncmp(ptr, "220", 3)) {
-         PACKET->DISSECTOR.banner = strdup(ptr + 4);
+      if (!strncmp((const char*)ptr, "220", 3)) {
+         PACKET->DISSECTOR.banner = strdup((const char*)ptr + 4);
          
          /* remove the \r\n */
-         if ( (ptr = strchr(PACKET->DISSECTOR.banner, '\r')) != NULL )
+         if ( (ptr = (u_char*)strchr(PACKET->DISSECTOR.banner, '\r')) != NULL )
             *ptr = '\0';
       }
             
@@ -100,7 +99,7 @@ FUNC_DECODER(dissector_smtp)
  *
  * the digests are in base64
  */
-   if ( !strncasecmp(ptr, "AUTH LOGIN", 10) ) {
+   if ( !strncasecmp((const char*)ptr, "AUTH LOGIN", 10) ) {
       
       DEBUG_MSG("\tDissector_smtp AUTH LOGIN");
 
@@ -135,23 +134,23 @@ FUNC_DECODER(dissector_smtp)
       return NULL;
    }
    
-   if (!strcmp(s->data, "AUTH")) {
+   if (!strcmp((const char*)s->data, "AUTH")) {
       char *user;
       int i;
      
       DEBUG_MSG("\tDissector_smtp AUTH LOGIN USER");
       
-      SAFE_CALLOC(user, strlen(ptr), sizeof(char));
+      SAFE_CALLOC(user, strlen((const char*)ptr), sizeof(char));
      
       /* username is encoded in base64 */
-      i = base64_decode(user, ptr);
+      i = base64_decode(user, (const char*)ptr);
      
       SAFE_FREE(s->data);
 
       /* store the username in the session */
       SAFE_CALLOC(s->data, strlen("AUTH USER ") + i + 1, sizeof(char) );
       
-      sprintf(s->data, "AUTH USER %s", user);
+      snprintf(s->data, strlen("AUTH USER ") + i + 1, "AUTH USER %s", user);
       
       SAFE_FREE(user);
 
@@ -164,10 +163,10 @@ FUNC_DECODER(dissector_smtp)
      
       DEBUG_MSG("\tDissector_smtp AUTH LOGIN PASS");
       
-      SAFE_CALLOC(pass, strlen(ptr), sizeof(char));
+      SAFE_CALLOC(pass, strlen((const char*)ptr), sizeof(char));
       
       /* password is encoded in base64 */
-      base64_decode(pass, ptr);
+      base64_decode(pass, (const char*)ptr);
      
       /* fill the structure */
       PACKET->DISSECTOR.user = strdup(s->data + strlen("AUTH USER "));

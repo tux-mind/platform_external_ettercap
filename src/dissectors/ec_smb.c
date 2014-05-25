@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_smb.c,v 1.15 2004/06/25 14:24:29 alor Exp $
 */
 
 #include <ec.h>
@@ -64,13 +63,14 @@ typedef struct {
 
 } smb_session_data;
 
+#define IF_IN_PCK(x,y) if((x) >= y->packet && (x) < (y->packet + y->len) )
 
 /* protos */
 
 FUNC_DECODER(dissector_smb);
 void smb_init(void);
-char *GetUser(char *user, char *dest, int len);
-void GetBinaryE(unsigned char *binary, unsigned char *dest, int len);
+unsigned char *GetUser(unsigned char *user, unsigned char *dest, int len);
+void GetBinaryE(unsigned char *binary, char *dest, int len);
 
 
 /************************************************/
@@ -153,7 +153,7 @@ FUNC_DECODER(dissector_smb)
       /* Session Setup if Negotiate Protocol has been done */      
       if (smb->cmd == 0x73 && FROM_CLIENT("smb", PACKET)) {
          ptr += ( (*ptr) * 2 + 3 );
-         if ( (ptr = (char *)memmem(ptr, 128, "NTLMSSP", 8)) == NULL) 
+         if ( (ptr = (u_char *)memmem(ptr, 128, "NTLMSSP", 8)) == NULL) 
             return NULL;
          if (ptr[8]!=1)
             return NULL; 
@@ -175,7 +175,7 @@ FUNC_DECODER(dissector_smb)
          if (session_data->status == LOGON_COMPLETED_OK || session_data->status == LOGON_COMPLETED_FAILURE) {
             
             /* Logon negotiation completed. It's time to dump passwords */
-            PACKET->DISSECTOR.user = strdup(session_data->user);
+            PACKET->DISSECTOR.user = strdup((const char*)session_data->user);
 	    
             /* We get domain information */
             if (session_data->domain[0] != 0) {
@@ -184,7 +184,7 @@ FUNC_DECODER(dissector_smb)
             }
 	    	    
             if (session_data->auth_type == PLAIN_TEXT_AUTH) {
-               PACKET->DISSECTOR.pass = strdup(session_data->response1);
+               PACKET->DISSECTOR.pass = strdup((const char*)session_data->response1);
                DISSECT_MSG("SMB : %s:%d -> USER: %s  PASS: %s ", ip_addr_ntoa(&PACKET->L3.dst, tmp),
                                                           ntohs(PACKET->L4.dst),
                                                           PACKET->DISSECTOR.user,
@@ -192,7 +192,7 @@ FUNC_DECODER(dissector_smb)
             } else {
                char ascii_hash[256];
 
-               sprintf(ascii_hash, "%s:\"\":\"\":",session_data->user);  
+               snprintf(ascii_hash, 40, "%s:\"\":\"\":", session_data->user);  
                GetBinaryE(session_data->response1, ascii_hash, 24);
                strcat(ascii_hash, ":");
                GetBinaryE(session_data->response2, ascii_hash, 24);
@@ -205,6 +205,10 @@ FUNC_DECODER(dissector_smb)
                                                           ntohs(PACKET->L4.dst),
                                                           PACKET->DISSECTOR.user,
                                                           PACKET->DISSECTOR.pass);
+
+
+		/* Call hook point when negotation is complete */	
+		hook_point(HOOK_PROTO_SMB_CMPLT, PACKET);
             }
 
             if (PACKET->DISSECTOR.info!=NULL)
@@ -231,7 +235,7 @@ FUNC_DECODER(dissector_smb)
          if (smb->cmd == 0x73) { /* Session SetUp Packets */ 
             if (session_data->status == WAITING_PLAIN_TEXT) {
                u_int16 pwlen, unilen;
-               char *Blob;
+               u_char *Blob;
 	 
                Blob = ptr;
                Blob += ( (*ptr) * 2 + 3 );
@@ -244,10 +248,14 @@ FUNC_DECODER(dissector_smb)
                if (pwlen > 1) 
                   memcpy(session_data->response1, Blob, sizeof(session_data->response1) - 1);
                else
-                  sprintf(session_data->response1, "(empty)");
-		  	 
-               Blob = GetUser(Blob+pwlen+unilen, session_data->user, 200);
-               GetUser(Blob, session_data->domain, 200);
+                  snprintf((char*)session_data->response1, 7, "(empty)");
+
+               IF_IN_PCK(Blob, PACKET)		  	 
+                  Blob = GetUser(Blob+pwlen+unilen, session_data->user, 200);
+		  
+               IF_IN_PCK(Blob, PACKET)
+                  GetUser(Blob, session_data->domain, 200);
+	       
                session_data->status = WAITING_LOGON_RESPONSE;
             } else if (session_data->status == WAITING_CHALLENGE) {
 	    
@@ -255,20 +263,20 @@ FUNC_DECODER(dissector_smb)
                hook_point(HOOK_PROTO_SMB_CHL, PACKET);
               
             } else if (session_data->status == WAITING_RESPONSE) {
-               char *Blob;
+               unsigned char *Blob;
                /* Jump the Words */
                ptr += ( (*ptr) * 2 + 3 );
 	 
                /* Jump ID String */
-               if ( (ptr = (char *)memmem(ptr, 128, "NTLMSSP", 8)) == NULL)  
+               if ( (ptr = (u_char *)memmem(ptr, 128, "NTLMSSP", 8)) == NULL)  
                   return NULL; 
 		     
                Blob = ptr;
-               ptr = strchr(ptr, 0);
+               ptr = (u_char*)strchr((const char*)ptr, 0);
                ptr++;
 	 
                if (*ptr == 3) { /* Msg Type AUTH */ 
-                  int LM_Offset, LM_Len, NT_Offset, NT_Len, Domain_Offset, Domain_Len, User_Offset, User_Len;
+                  u_int LM_Offset, LM_Len, NT_Offset, NT_Len, Domain_Offset, Domain_Len, User_Offset, User_Len;
                   ptr += 4;
                   LM_Len = *(u_int16 *)ptr;
                   ptr += 4;
@@ -290,18 +298,24 @@ FUNC_DECODER(dissector_smb)
                      session_data->status = WAITING_CHALLENGE;     
                      return NULL;
                   }
-		  
-                  GetUser(Blob+User_Offset, session_data->user, User_Len);
-                  GetUser(Blob+Domain_Offset, session_data->domain, Domain_Len);
+
+                  IF_IN_PCK((u_char*)Blob+User_Offset, PACKET)
+                     GetUser(Blob+User_Offset, session_data->user, User_Len);
+		     
+                  IF_IN_PCK((u_char*)Blob+Domain_Offset, PACKET)
+                     GetUser(Blob+Domain_Offset, session_data->domain, Domain_Len);
 		 
-                  if (LM_Len == 24) 
-                     memcpy(session_data->response1, Blob+LM_Offset, 24);
+                  if (LM_Len == 24)
+                     IF_IN_PCK((u_char*)Blob+LM_Offset, PACKET)
+                        memcpy(session_data->response1, Blob+LM_Offset, 24);
  
-                  memcpy(session_data->response2, Blob+NT_Offset, 24);
+                  IF_IN_PCK((u_char*)Blob+NT_Offset, PACKET)
+                     memcpy(session_data->response2, Blob+NT_Offset, 24);
+		     
                   session_data->status = WAITING_LOGON_RESPONSE;
                }
             } else if (session_data->status == WAITING_ENCRYPT) {
-               char *Blob;
+               unsigned char *Blob;
 	 
                Blob = ptr;
                Blob += ( (*ptr) * 2 + 3 );
@@ -317,7 +331,7 @@ FUNC_DECODER(dissector_smb)
                     memcmp(session_data->response1, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 24) ) {
                     memset(session_data->response1, 0, 24);
                     memset(session_data->response2, 0, 24);
-                    strcpy(session_data->user, "(empty)");
+                    strncpy((char*)session_data->user, "(empty)", 7);
                     session_data->domain[0]=0;		    		    
                }
 	       
@@ -328,9 +342,9 @@ FUNC_DECODER(dissector_smb)
          if (smb->cmd == 0x73) { /* Session SetUp packets */
             if (session_data->status == WAITING_CHALLENGE) {
                ptr += ( (*ptr) * 2 + 3 );
-               if ( (ptr = (char *)memmem(ptr, 128, "NTLMSSP", 8)) == NULL) 
+               if ( (ptr = (u_char *)memmem(ptr, 128, "NTLMSSP", 8)) == NULL) 
                   return NULL;
-               ptr = strchr(ptr, 0);
+               ptr = (u_char*)strchr((const char*)ptr, 0);
                ptr++;
 	  
                if (*ptr == 2) {
@@ -356,7 +370,7 @@ FUNC_DECODER(dissector_smb)
  * If the username is Unicode convert into ASCII 
  * XXX - what about strange unicode charsets???
  */
-char *GetUser(char *user, char *dest, int len)
+unsigned char *GetUser(unsigned char *user, unsigned char *dest, int len)
 {
    char Unicode = 1;
    int i = 0;
@@ -384,12 +398,12 @@ char *GetUser(char *user, char *dest, int len)
 }
 
 /* Convert and attach a binary array to ASCII chars */
-void GetBinaryE(unsigned char *binary, unsigned char *dest, int blen)
+void GetBinaryE(unsigned char *binary, char *dest, int blen)
 {
    char dummy[5];
    
    for (; blen > 0; blen--) {	
-       sprintf( dummy, "%02X", *binary);
+       snprintf( dummy, 3, "%02X", *binary);
        binary++;
        strcat(dest, dummy);
    }

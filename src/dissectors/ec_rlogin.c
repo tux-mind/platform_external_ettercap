@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_rlogin.c,v 1.14 2004/06/25 14:24:29 alor Exp $
 */
 
 #include <ec.h>
@@ -89,13 +88,13 @@ FUNC_DECODER(dissector_rlogin)
    /* the first packet after handshake */
    if (session_get(&s, ident, DISSECT_IDENT_LEN) == ESUCCESS && s->data) {
       if (!strcmp(s->data, "HANDSHAKE")) {
-         u_char *localuser;
-         u_char *remoteuser;
+         char *localuser;
+         char *remoteuser;
 
-         localuser = ptr;
+         localuser = (char*)ptr;
 
          /* sanity check */
-         if (localuser + strlen(localuser) + 2 < end)
+         if ((localuser + strlen(localuser) + 2) < (char*)end)
             remoteuser = localuser + strlen(localuser) + 1;
          else {
             /* bad packet, abort the collection process */
@@ -109,7 +108,7 @@ FUNC_DECODER(dissector_rlogin)
          /* make room for the string */
          SAFE_CALLOC(s->data, strlen(localuser) + strlen(remoteuser) + 5, sizeof(char));
          
-         sprintf(s->data, "%s (%s)\r", remoteuser, localuser);
+         snprintf(s->data, strlen(localuser)+strlen(remoteuser) + 5, "%s (%s)\r", remoteuser, localuser);
 
          SAFE_FREE(ident);
          return NULL;
@@ -119,8 +118,8 @@ FUNC_DECODER(dissector_rlogin)
    /* concat the pass to the collected user */
    if (session_get(&s, ident, DISSECT_IDENT_LEN) == ESUCCESS && s->data) {
       size_t i;
-      u_char *p;
-      u_char str[strlen(s->data) + PACKET->DATA.disp_len + 2];
+      char *p;
+      char str[strlen(s->data) + PACKET->DATA.disp_len + 2];
 
       memset(str, 0, sizeof(str));
     
@@ -130,7 +129,9 @@ FUNC_DECODER(dissector_rlogin)
       /* parse the string for backspaces and erase as wanted */
       for (p = str, i = 0; i < strlen(str); i++) {
          if (str[i] == '\b' || str[i] == 0x7f) {
-            p--;
+            /* don't go behind str */
+            if (p > str)
+               p--;
          } else {
             *p = str[i];
             p++;  
@@ -148,18 +149,22 @@ FUNC_DECODER(dissector_rlogin)
        * the presence of \r in the string
        * we store "user\rpass\r" and then we split it
        */
-      if (strchr(ptr, '\r') || strchr(ptr, '\n')) {
+      if (strchr((const char*)ptr, '\r') || strchr((const char*)ptr, '\n')) {
          /* there is the \r and it is not the last char */
-         if ( ((ptr = strchr(s->data, '\r')) || (ptr = strchr(s->data, '\n')))
+         if ( ((ptr = (u_char*)strchr(s->data, '\r')) || (ptr = (u_char*)strchr(s->data, '\n')))
                && ptr != s->data + strlen(s->data) - 1 ) {
 
             /* fill the structure */
             PACKET->DISSECTOR.user = strdup(s->data);
-            if ( (ptr = strchr(PACKET->DISSECTOR.user, '\r')) != NULL )
+            if ( (ptr = (u_char*)strchr((const char*)PACKET->DISSECTOR.user, '\r')) != NULL )
                *ptr = '\0';
+            else {
+               SAFE_FREE(PACKET->DISSECTOR.user);
+               return NULL;
+            }
    
-            PACKET->DISSECTOR.pass = strdup(ptr + 1);
-            if ( (ptr = strchr(PACKET->DISSECTOR.pass, '\r')) != NULL )
+            PACKET->DISSECTOR.pass = strdup((const char*)ptr + 1);
+            if ( (ptr = (u_char*)strchr(PACKET->DISSECTOR.pass, '\r')) != NULL )
                *ptr = '\0';
            
             /* 

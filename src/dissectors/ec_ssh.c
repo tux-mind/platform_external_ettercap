@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_ssh.c,v 1.25 2004/05/27 10:59:52 alor Exp $
 */
 
 #include <ec.h>
@@ -26,6 +25,9 @@
 #include <ec_session.h>
 #include <ec_streambuf.h>
 #include <ec_checksum.h>
+
+#ifdef HAVE_OPENSSL
+
 
 /* don't include kreberos. RH sux !! */
 #define OPENSSL_NO_KRB5 1
@@ -166,10 +168,10 @@ FUNC_DECODER(dissector_ssh)
          }
 
          /* Catch the version banner */
-         PACKET->DISSECTOR.banner = strdup(PACKET->DATA.data);
+         PACKET->DISSECTOR.banner = strdup((const char*)PACKET->DATA.data);
          
          /* remove the \n */
-         if ( (ptr = strchr(PACKET->DISSECTOR.banner, '\n')) != NULL )
+         if ( (ptr = (u_char*)strchr(PACKET->DISSECTOR.banner, '\n')) != NULL )
             *ptr = '\0';
       }      
    } else { /* The session exists */
@@ -246,7 +248,7 @@ FUNC_DECODER(dissector_ssh)
                } else
                   PACKET->DISSECTOR.pass = strdup("(empty)");
 		  
-               PACKET->DISSECTOR.user = strdup(session_data->user); /* Surely NULL terminated */
+               PACKET->DISSECTOR.user = strdup((const char*)session_data->user); /* Surely NULL terminated */
                DISSECT_MSG("SSH : %s:%d -> USER: %s  PASS: %s\n", ip_addr_ntoa(&PACKET->L3.dst, tmp),
                                                                ntohs(PACKET->L4.dst),
                                                                PACKET->DISSECTOR.user,
@@ -254,7 +256,7 @@ FUNC_DECODER(dissector_ssh)
 
             } else if (ssh_packet_type == CMSG_AUTH_RHOSTS) {
                DEBUG_MSG("\tDissector_ssh RHOSTS");
-               PACKET->DISSECTOR.user = strdup(session_data->user);
+               PACKET->DISSECTOR.user = strdup((const char*)session_data->user);
                /* XXX Do we need to catch more infos from this kind of packet? */
                PACKET->DISSECTOR.pass = strdup("RHOSTS-AUTH\n");
                DISSECT_MSG("SSH : %s:%d -> USER: %s  %s\n", ip_addr_ntoa(&PACKET->L3.dst, tmp),
@@ -263,7 +265,7 @@ FUNC_DECODER(dissector_ssh)
                                                          PACKET->DISSECTOR.pass);
             } else if (ssh_packet_type == CMSG_AUTH_RSA) {
                DEBUG_MSG("\tDissector_ssh RSA AUTH");
-               PACKET->DISSECTOR.user = strdup(session_data->user);
+               PACKET->DISSECTOR.user = strdup((const char*)session_data->user);
                PACKET->DISSECTOR.pass = strdup("RSA-AUTH\n");
                DISSECT_MSG("SSH : %s:%d -> USER: %s  %s\n", ip_addr_ntoa(&PACKET->L3.dst, tmp),
                                                          ntohs(PACKET->L4.dst),
@@ -746,6 +748,7 @@ static void rsa_private_decrypt(BIGNUM *out, BIGNUM *in, RSA *key)
    free(inbuf);
 }
 
+#endif
 
 /* EOF */
 

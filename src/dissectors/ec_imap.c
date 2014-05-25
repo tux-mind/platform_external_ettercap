@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_imap.c,v 1.16 2004/06/25 14:24:29 alor Exp $
 */
 
 /*
@@ -83,11 +82,11 @@ FUNC_DECODER(dissector_imap)
       /* reached the end */
       if (ptr == end) return NULL;
       
-      if (!strncmp(ptr, " OK ", 4)) {
-         PACKET->DISSECTOR.banner = strdup(ptr + 3);
+      if (!strncmp((const char*)ptr, " OK ", 4)) {
+         PACKET->DISSECTOR.banner = strdup((const char*)ptr + 3);
       
          /* remove the \r\n */
-         if ( (ptr = strchr(PACKET->DISSECTOR.banner, '\r')) != NULL )
+         if ( (ptr = (u_char*)strchr(PACKET->DISSECTOR.banner, '\r')) != NULL )
             *ptr = '\0';
       }
    } ENDIF_FIRST_PACKET_FROM_SERVER(s, ident)
@@ -103,8 +102,13 @@ FUNC_DECODER(dissector_imap)
    DEBUG_MSG("IMAP --> TCP dissector_imap");
    
 
-   /* skip the number, move to the command */
-   while(*ptr != ' ' && ptr != end) ptr++;
+   /* skip the number, move to the command
+    * if there is no space in the line, we are
+    * probably already transferring credentials
+    */
+   if (strchr((char*)ptr, ' ')) {
+      while(*ptr != ' ' && ptr != end) ptr++;
+   }
   
    /* reached the end */
    if (ptr == end) return NULL;
@@ -114,22 +118,26 @@ FUNC_DECODER(dissector_imap)
  *
  * n LOGIN user pass
  */
-   if ( !strncasecmp(ptr, " LOGIN ", 7) ) {
+   if ( !strncasecmp((const char*)ptr, " LOGIN ", 7) ) {
 
       DEBUG_MSG("\tDissector_imap LOGIN");
 
       ptr += 7;
       
-      PACKET->DISSECTOR.user = strdup(ptr);
+      PACKET->DISSECTOR.user = strdup((const char*)ptr);
       
       /* split the string */
-      if ( (ptr = strchr(PACKET->DISSECTOR.user, ' ')) != NULL )
+      if ( (ptr = (u_char*)strchr(PACKET->DISSECTOR.user, ' ')) != NULL )
          *ptr = '\0';
+      else {
+         SAFE_FREE(PACKET->DISSECTOR.user);
+         return NULL;
+      }
       
       /* save the second part */
-      PACKET->DISSECTOR.pass = strdup(ptr + 1);
+      PACKET->DISSECTOR.pass = strdup((const char*)ptr + 1);
       
-      if ( (ptr = strchr(PACKET->DISSECTOR.pass, '\r')) != NULL )
+      if ( (ptr = (u_char*)strchr(PACKET->DISSECTOR.pass, '\r')) != NULL )
          *ptr = '\0';
       
       /* print the message */
@@ -148,7 +156,7 @@ FUNC_DECODER(dissector_imap)
  *
  * the digests are in base64
  */
-   if ( !strncasecmp(ptr, "AUTHENTICATE LOGIN", 19) ) {
+   if ( !strncasecmp((const char*)ptr, " AUTHENTICATE LOGIN", 19) ) {
       
       DEBUG_MSG("\tDissector_imap AUTHENTICATE LOGIN");
 
@@ -167,6 +175,36 @@ FUNC_DECODER(dissector_imap)
       /* username is in the next packet */
       return NULL;
    }
+
+/* 
+ * AUTHENTICATE PLAIN
+ *
+ * digest(authcid+\0+user+\0+pass)
+ *
+ * the digest is in base64
+ *
+ * we ignore the authzid (authorization identity) for now
+ */
+   if ( !strncasecmp((const char*)ptr, " AUTHENTICATE PLAIN", 19) ) {
+      
+      DEBUG_MSG("\tDissector_imap AUTHENTICATE PLAIN");
+
+      /* destroy any previous session */
+      dissect_wipe_session(PACKET, DISSECT_CODE(dissector_imap));
+      
+      /* create the new session */
+      dissect_create_session(&s, PACKET, DISSECT_CODE(dissector_imap));
+     
+      /* remember the state (used later) */
+      s->data = strdup("PLAIN");
+     
+      /* save the session */
+      session_put(s);
+      
+      /* username is in the next packet */
+      return NULL;
+   }
+
    
    /* search the session (if it exist) */
    dissect_create_ident(&ident, PACKET, DISSECT_CODE(dissector_imap));
@@ -189,17 +227,17 @@ FUNC_DECODER(dissector_imap)
      
       DEBUG_MSG("\tDissector_imap AUTHENTICATE LOGIN USER");
       
-      SAFE_CALLOC(user, strlen(ptr), sizeof(char));
+      SAFE_CALLOC(user, strlen((const char*)ptr), sizeof(char));
      
       /* username is encoded in base64 */
-      i = base64_decode(user, ptr);
+      i = base64_decode(user, (const char*)ptr);
      
       SAFE_FREE(s->data);
 
       /* store the username in the session */
       SAFE_CALLOC(s->data, strlen("AUTH USER ") + i + 1, sizeof(char) );
       
-      sprintf(s->data, "AUTH USER %s", user);
+      snprintf(s->data, strlen("AUTH USER ") + i + 1, "AUTH USER %s", user);
       
       SAFE_FREE(user);
 
@@ -212,10 +250,10 @@ FUNC_DECODER(dissector_imap)
      
       DEBUG_MSG("\tDissector_imap AUTHENTICATE LOGIN PASS");
       
-      SAFE_CALLOC(pass, strlen(ptr), sizeof(char));
+      SAFE_CALLOC(pass, strlen((const char*)ptr), sizeof(char));
       
       /* password is encoded in base64 */
-      base64_decode(pass, ptr);
+      base64_decode(pass, (const char*)ptr);
      
       /* fill the structure */
       PACKET->DISSECTOR.user = strdup(s->data + strlen("AUTH USER "));
@@ -232,6 +270,43 @@ FUNC_DECODER(dissector_imap)
                                     PACKET->DISSECTOR.pass);
       return NULL;
    }
+   
+   if (!strcmp(s->data, "PLAIN")) {
+      char *cred;
+      char *cred_end;
+      char *p;
+      int i;
+     
+      DEBUG_MSG("\tDissector_imap AUTHENTICATE PLAIN USER/PASS");
+      
+      SAFE_CALLOC(cred, strlen((const char*)ptr), sizeof(char));
+      
+      /* password is encoded in base64 */
+      i = base64_decode(cred, (const char*)ptr);
+      p = cred;
+      cred_end = cred+i;
+      /* move to the username right after the first \0  */
+      while(*p && p!=cred_end) p++;
+      if (p!=cred_end) p++;
+      /* fill the structure */
+      PACKET->DISSECTOR.user = strdup(p);
+      /* now find the password right after the first \0 in cred */
+      while(*p && p!=cred_end) p++;
+      if (p!=cred_end) p++;
+      PACKET->DISSECTOR.pass = strdup(p);
+      
+      SAFE_FREE(cred);
+      /* destroy the session */
+      dissect_wipe_session(PACKET, DISSECT_CODE(dissector_imap));
+      
+      /* print the message */
+      DISSECT_MSG("IMAP : %s:%d -> USER: %s  PASS: %s\n", ip_addr_ntoa(&PACKET->L3.dst, tmp),
+                                    ntohs(PACKET->L4.dst), 
+                                    PACKET->DISSECTOR.user,
+                                    PACKET->DISSECTOR.pass);
+      return NULL;
+   }
+
    
    return NULL;
 }
