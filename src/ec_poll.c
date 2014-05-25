@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_poll.c,v 1.5 2004/07/20 09:53:53 alor Exp $
 */
 
 #include <ec.h>
@@ -45,7 +44,8 @@ int ec_poll_buffer(char *buf);
  */
 int ec_poll_in(int fd, u_int msec)
 {
-#ifdef HAVE_POLL
+#if defined(HAVE_POLL) && !defined(OS_DARWIN)
+   int poll_result;
    struct pollfd poll_fd;
    
    /* set the correct fd */
@@ -53,10 +53,10 @@ int ec_poll_in(int fd, u_int msec)
    poll_fd.events = POLLIN;
          
    /* execute the syscall */
-   poll(&poll_fd, 1, msec);
-
+   poll_result = poll(&poll_fd, 1, msec);
+   
    /* the event has occurred, return 1 */
-   if (poll_fd.revents & POLLIN)
+   if (poll_result > 0 && poll_fd.revents & POLLIN)
       return 1;
   
    return 0;
@@ -76,8 +76,11 @@ int ec_poll_in(int fd, u_int msec)
    FD_SET(fd, &msk_fd);
 
    /* execute the syscall */
-   select(FOPEN_MAX, &msk_fd, (fd_set *) 0, (fd_set *) 0, &to);
-   
+   int fds = select(FOPEN_MAX, &msk_fd, (fd_set *) 0, (fd_set *) 0, &to);
+  
+   if (fds <= 0) {
+      return 0;
+   } 
    /* the even has occurred */
    if (FD_ISSET(0, &msk_fd))
       return 1;
@@ -94,7 +97,7 @@ int ec_poll_in(int fd, u_int msec)
  */
 int ec_poll_out(int fd, u_int msec)
 {
-#ifdef HAVE_POLL
+#if defined(HAVE_POLL) && !defined(OS_DARWIN)
    struct pollfd poll_fd;
    
    /* set the correct fd */
@@ -125,8 +128,10 @@ int ec_poll_out(int fd, u_int msec)
    FD_SET(fd, &msk_fd);
 
    /* execute the syscall */
-   select(FOPEN_MAX, (fd_set *) 0, &msk_fd, (fd_set *) 0, &to);
-   
+   int fds = select(FOPEN_MAX, (fd_set *) 0, &msk_fd, (fd_set *) 0, &to);
+    
+   if (fds <=0)
+      return 0; 
    /* the even has occurred */
    if (FD_ISSET(0, &msk_fd))
       return 1;

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_session.c,v 1.24 2004/04/18 10:02:02 alor Exp $
 */
 
 #include <ec.h>
@@ -245,6 +244,7 @@ int session_get_and_del(struct ec_session **s, void *ident, size_t ident_len)
 
 void session_free(struct ec_session *s)
 {
+   DEBUG_MSG("session_free: [%p] deleted", s->ident);
    SAFE_FREE(s->ident);
    /* call the cleanup function to free pointers in the data portion */
    if (s->free)

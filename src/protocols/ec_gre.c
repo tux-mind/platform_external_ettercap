@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_gre.c,v 1.7 2004/05/27 10:59:52 alor Exp $
 */
 
 #include <ec.h>
@@ -27,7 +26,7 @@
 /* globals */
 
 /* Flag mask - 
- * (taken from ethereal gre decoder 
+ * (taken from wireshark gre decoder
  * by Brad Robel-Forrest) 
  */
 #define GH_B_C       0x8000

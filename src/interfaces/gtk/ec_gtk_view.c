@@ -17,13 +17,13 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_gtk_view.c,v 1.10 2004/05/21 14:25:22 alor Exp $
 */
 
 #include <ec.h>
 #include <ec_gtk.h>
 #include <ec_format.h>
 #include <ec_parser.h>
+#include <ec_encryption.h>
 
 /* proto */
 
@@ -32,8 +32,8 @@ void toggle_resolve(void);
 void gtkui_vis_method(void);
 void gtkui_vis_regex(void);
 static void gtkui_set_regex(void);
-void gtkui_wep_key(void);
-static void gtkui_set_wepkey(void);
+void gtkui_wifi_key(void);
+static void gtkui_set_wifikey(void);
 
 static void gtkui_stop_stats(void);
 static void gtkui_stats_detach(GtkWidget *child);
@@ -42,9 +42,6 @@ static gboolean refresh_stats(gpointer data);
 
 extern void gtkui_show_profiles(void);
 extern void gtkui_show_connections(void);
-
-/* from the ec_wifi.c decoder */
-extern int set_wep_key(u_char *string);
 
 /* globals */
 
@@ -412,22 +409,24 @@ void gtkui_vis_method(void)
       }
 
       /* set vmethod string */
+      int i=0;
       switch(active) {
-         case 6: strcpy(vmethod, "hex"); break;
-         case 5: strcpy(vmethod, "ascii"); break; 
-         case 4: strcpy(vmethod, "text"); break;
-         case 3: strcpy(vmethod, "ebcdic"); break;
-         case 2: strcpy(vmethod, "html"); break;
+         case 6: strncpy(vmethod, "hex", 3); break;
+         case 5: strncpy(vmethod, "ascii", 5); break; 
+         case 4: strncpy(vmethod, "text", 4); break;
+         case 3: strncpy(vmethod, "ebcdic", 6); break;
+         case 2: strncpy(vmethod, "html", 4); break;
          case 1: /* utf8 */
             /* copy first word from encoding choice */
-            sscanf(gtk_entry_get_text(GTK_ENTRY (GTK_COMBO (lang_combo)->entry)),
+            i=sscanf(gtk_entry_get_text(GTK_ENTRY (GTK_COMBO (lang_combo)->entry)),
                    "%[^ ]", encoding);
+            BUG_IF(i!=1);
             if(strlen(encoding) > 0) {
-               strcpy(vmethod, "utf8");
+               strncpy(vmethod, "utf8", 4);
                set_utf8_encoding(encoding);
                break;
             }
-         default: strcpy(vmethod, "ascii");
+         default: strncpy(vmethod, "ascii", 5);
       }
 
       set_format(vmethod);
@@ -452,18 +451,18 @@ static void gtkui_set_regex(void)
 }
 
 /*
- * set the WEP key
+ * set the Wifi key
  */
-void gtkui_wep_key(void)
+void gtkui_wifi_key(void)
 {
-   DEBUG_MSG("gtk_wep_key");
+   DEBUG_MSG("gtk_wifi_key");
 
-   gtkui_input("WEP key :", wkey, WLEN, gtkui_set_wepkey);
+   gtkui_input("WiFi key :", wkey, WLEN, gtkui_set_wifikey);
 }
 
-static void gtkui_set_wepkey(void)
+static void gtkui_set_wifikey(void)
 {
-   set_wep_key(wkey);
+   wifi_key_prepare(wkey);
 }
 
 /* EOF */

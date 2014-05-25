@@ -15,7 +15,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_mingw.c,v 1.11 2004/12/21 11:24:03 alor Exp $
     
     Various functions needed for native Windows compilers (not CygWin I guess??)
     We export these (for the plugins) with a "ec_win_" prefix in order not to accidentally
@@ -135,7 +134,7 @@ void disable_ip_forward (void)
 }
 
 /*
- * Get and set the read-event assosiated with the pcap handle. This
+ * Get and set the read-event associated with the pcap handle. This
  * causes pcap_loop() to terminate (ReadFile hopefully returns 0).
  * Note: this function is called outside the capture thread, so take
  * care not to modify the pcap_handle in any way.
@@ -499,7 +498,7 @@ const char *ec_win_strsignal (int signo)
          return ("SIGXFSZ");
 #endif
   }
-  strcpy (buf, "Unknown ");
+  strncpy (buf, "Unknown ", 9);
   itoa (signo, buf+8, 10);
   return (buf);
 }
@@ -510,14 +509,14 @@ const char *ec_win_strsignal (int signo)
 
 int ec_win_fork(void)
 {
-   USER_MSG("fork() not yet supported");
+   USER_MSG("fork() not yet supported\n");
    errno = ENOSYS;
    return -1;
 }
 
 int ec_win_wait (int *status)
 {
-   USER_MSG("wait() not yet supported");
+   USER_MSG("wait() not yet supported\n");
    errno = ENOSYS;
    (void) status;
    return -1;
@@ -1017,7 +1016,7 @@ char *ec_win_strerror (int err)
   if (!get_winsock_error (err, buf, sizeof(buf)) &&
         !FormatMessage (flags, NULL, err,
                         lang, buf, sizeof(buf)-1, NULL))
-     sprintf (buf, "Unknown error %d (%#x)", err, err);
+     snprintf (buf, 512, "Unknown error %d (%#x)", err, err);
   }
             
 
@@ -1143,7 +1142,7 @@ static void setup_console (void)
   if (!attached_to_console && !AllocConsole()) {
      char error[256];
 
-     sprintf (error, "AllocConsole failed; error %lu", GetLastError());
+     snprintf (error, 256, "AllocConsole failed; error %lu", GetLastError());
      MessageBox (NULL, error, "Fatal", MB_ICONEXCLAMATION | MB_SETFOREGROUND);
      exit (-1);
   }

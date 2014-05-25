@@ -15,7 +15,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_solaris.c,v 1.7 2004/07/13 09:35:44 alor Exp $
 */
 
 #include <ec.h>
@@ -46,7 +45,7 @@ void disable_ip_forward(void)
 
    cp = "ip_forwarding";
    memset(buf, '\0', sizeof(buf));
-   sprintf(buf, "%s", cp);
+   snprintf(buf, 13, "%s", cp);
 
    if ((fd = open("/dev/ip", O_RDWR)) < 0)
       ERROR_MSG("open failed for /dev/ip");
@@ -63,12 +62,12 @@ void disable_ip_forward(void)
  
 
    if (strIo.ic_cmd == ND_GET) {
-      strcpy(saved_status, buf);
+      strncpy(saved_status, buf, 2);
                                                       }
    DEBUG_MSG("disable_ip_forward -- previous value = %s", saved_status);
 
    memset(buf, '\0', sizeof(buf));
-   sprintf(buf, "%s", cp);
+   snprintf(buf, 13, "%s", cp);
 
    /* the format is "element"\0"value"\0 */
    buf[strlen(buf) + 1] = '0';  
@@ -98,10 +97,10 @@ static void restore_ip_forward(void)
    
    cp = "ip_forwarding";
    memset(buf, '\0', sizeof(buf));
-   sprintf(buf, "%s", cp);
+   snprintf(buf, 13, "%s", cp);
 
    /* the format is "element"\0"value"\0 */
-   sprintf(buf + strlen(buf)+1, "%s", saved_status);   
+   snprintf(buf + strlen(buf)+1, 2, "%s", saved_status);   
 
    DEBUG_MSG("ATEXIT: restore_ip_forward -- restoring to value = %s", saved_status);
 

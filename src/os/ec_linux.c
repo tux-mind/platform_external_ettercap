@@ -15,12 +15,11 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_linux.c,v 1.8 2004/07/13 09:35:44 alor Exp $
 */
 
 #include <ec.h>
-
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 #include <net/if.h>
 
 /* the old value */
@@ -31,6 +30,8 @@ static char saved_status;
 void disable_ip_forward(void);
 static void restore_ip_forward(void);
 u_int16 get_iface_mtu(const char *iface);
+void disable_interface_offload(void);
+void safe_free_mem(char **param, int *param_length, char *command);
 
 /*******************************************/
 
@@ -46,7 +47,14 @@ void disable_ip_forward(void)
 
    DEBUG_MSG("disable_ip_forward: old value = %c", saved_status);
  
-   fd = fopen("/proc/sys/net/ipv4/ip_forward", "w");
+   /* sometimes writing just fails... retry up to 5 times */
+   int i = 0;
+   fd = NULL;
+   do {
+      fd = fopen("/proc/sys/net/ipv4/ip_forward", "w");
+      i++;
+      usleep(20000);
+   } while(fd == NULL && i <=50);
    ON_ERROR(fd, NULL, "failed to open /proc/sys/net/ipv4/ip_forward");
    
    fprintf(fd, "0");
@@ -77,8 +85,15 @@ static void restore_ip_forward(void)
       DEBUG_MSG("ATEXIT: restore_ip_forward: does not need restoration");
       return;
    }
-   
-   fd = fopen("/proc/sys/net/ipv4/ip_forward", "w");
+
+   /* sometimes writing just fails... retry up to 5 times */
+   int i = 0;
+   fd = NULL;
+   do {
+      fd = fopen("/proc/sys/net/ipv4/ip_forward", "w");
+      i++;
+      usleep(20000);
+   } while(fd == NULL && i <=50);
    if (fd == NULL) {
       FATAL_ERROR("ip_forwarding was disabled, but we cannot re-enable it now.\n"
                   "remember to re-enable it manually\n");
@@ -116,6 +131,64 @@ u_int16 get_iface_mtu(const char *iface)
    close(sock);
    
    return mtu;
+}
+
+void safe_free_mem(char **param, int *param_length, char *command)
+{
+   int k;
+
+   SAFE_FREE(command);
+	for(k= 0; k < (*param_length); ++k)
+		SAFE_FREE(param[k]);
+	SAFE_FREE(param);
+}
+
+/*
+ * disable segmentation offload on interface
+ * this prevents L3 send errors (payload too large)
+ */
+void disable_interface_offload(void)
+{
+	int param_length= 0;
+	char *command;
+	char **param = NULL;
+	char *p;
+	int ret_val, i = 0;
+
+	SAFE_CALLOC(command, 100, sizeof(char));
+
+	BUG_IF(command==NULL);
+
+	memset(command, '\0', 100);	
+	snprintf(command, 99, "ethtool -K %s tso off gso off gro off lro off", GBL_OPTIONS->iface);
+
+	DEBUG_MSG("disable_interface_offload: Disabling offload on %s", GBL_OPTIONS->iface);
+
+	for(p = strsep(&command, " "); p != NULL; p = strsep(&command, " ")) {
+		SAFE_REALLOC(param, (i+1) * sizeof(char *));
+		param[i++] = strdup(p);	
+	}
+
+	SAFE_REALLOC(param, (i+1) * sizeof(char *));
+	param[i] = NULL;
+	param_length= i + 1; //because there is a SAFE_REALLOC after the for.
+
+	switch(fork()) {
+		case 0:
+#ifndef DEBUG
+			/* don't print on console if the ethtool cannot disable some offloads unless you are in debug mode */
+			close(2);
+#endif
+			execvp(param[0], param);
+			WARN_MSG("cannot disable offload on %s, do you have ethtool installed?", GBL_OPTIONS->iface);
+			safe_free_mem(param, &param_length, command);
+			_exit(EINVALID);
+		case -1:
+			safe_free_mem(param, &param_length, command);
+		default:
+			safe_free_mem(param, &param_length, command);
+			wait(&ret_val);
+	} 	
 }
 
 /* EOF */

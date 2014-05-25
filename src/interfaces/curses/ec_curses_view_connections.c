@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_curses_view_connections.c,v 1.23 2004/09/30 16:01:45 alor Exp $
 */
 
 #include <ec.h>
@@ -202,7 +201,7 @@ static void curses_connection_detail(void *conn)
    wdg_window_print(wdg_conn_detail, 1, 10, "Source port             :  %-5d  %s", ntohs(c->co->L4_addr1), service_search(c->co->L4_addr1, c->co->L4_proto));
    wdg_window_print(wdg_conn_detail, 1, 11, "Destination port        :  %-5d  %s", ntohs(c->co->L4_addr2), service_search(c->co->L4_addr2, c->co->L4_proto));
    
-   wdg_window_print(wdg_conn_detail, 1, 13, "Transferred bytes       :  %d", c->co->xferred);
+   wdg_window_print(wdg_conn_detail, 1, 13, "--> %d    <-- %d   total: %d ", c->co->tx, c->co->rx, c->co->xferred);
    
    if (c->co->DISSECTOR.user) {
       wdg_window_print(wdg_conn_detail, 1, 15, "Account                 :  %s / %s", c->co->DISSECTOR.user, c->co->DISSECTOR.pass);
@@ -232,7 +231,7 @@ static void curses_connection_data(void *conn)
    curr_conn = c->co;
    curr_conn->flags |= CONN_VIEWING;
    
-   /* default is splitted view */
+   /* default is split view */
    curses_connection_data_split();
 }
 
@@ -240,7 +239,7 @@ static void curses_connection_data_help(void)
 {
    char help[] = "HELP: shortcut list:\n\n"
                  "  ARROWS - switch between panels\n" 
-                 "    j    - switch from splitted to joined view\n"
+                 "    j    - switch from split to joined view\n"
                  "    y    - inject characters interactively\n"
                  "    Y    - inject characters from a file\n"
                  "    k    - kill the connection";
@@ -277,14 +276,14 @@ static void curses_connection_data_split(void)
    wdg_set_size(wdg_conndata, 1, 2, -1, SYSMSG_WIN_SIZE - 1);
    
    wdg_create_object(&wdg_c1, WDG_SCROLL, 0);
-   sprintf(title, "%s:%d", ip_addr_ntoa(&curr_conn->L3_addr1, tmp), ntohs(curr_conn->L4_addr1));
+   snprintf(title, MAX_ASCII_ADDR_LEN+6, "%s:%d", ip_addr_ntoa(&curr_conn->L3_addr1, tmp), ntohs(curr_conn->L4_addr1));
    wdg_set_title(wdg_c1, title, WDG_ALIGN_LEFT);
    wdg_set_color(wdg_c1, WDG_COLOR_TITLE, EC_COLOR_TITLE);
    wdg_set_color(wdg_c1, WDG_COLOR_FOCUS, EC_COLOR_FOCUS);
    wdg_set_size(wdg_c1, 2, 3, current_screen.cols / 2, SYSMSG_WIN_SIZE - 2);
    
    wdg_create_object(&wdg_c2, WDG_SCROLL, 0);
-   sprintf(title, "%s:%d", ip_addr_ntoa(&curr_conn->L3_addr2, tmp), ntohs(curr_conn->L4_addr2));
+   snprintf(title, MAX_ASCII_ADDR_LEN+6, "%s:%d", ip_addr_ntoa(&curr_conn->L3_addr2, tmp), ntohs(curr_conn->L4_addr2));
    wdg_set_title(wdg_c2, title, WDG_ALIGN_LEFT);
    wdg_set_color(wdg_c2, WDG_COLOR_TITLE, EC_COLOR_TITLE);
    wdg_set_color(wdg_c2, WDG_COLOR_FOCUS, EC_COLOR_FOCUS);
@@ -335,7 +334,7 @@ static void split_print(u_char *text, size_t len, struct ip_addr *L3_src)
    
    /* check the regex filter */
    if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, text, 0, NULL, 0) != 0) {
+       regexec(GBL_OPTIONS->regex, (const char*)text, 0, NULL, 0) != 0) {
       return;
    }
 
@@ -367,7 +366,7 @@ static void split_print_po(struct packet_object *po)
    
    /* check the regex filter */
    if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, po->DATA.disp_data, 0, NULL, 0) != 0) {
+       regexec(GBL_OPTIONS->regex, (const char*)po->DATA.disp_data, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -415,7 +414,7 @@ static void curses_connection_data_join(void)
    wdg_set_size(wdg_conndata, 1, 2, -1, SYSMSG_WIN_SIZE - 1);
    
    wdg_create_object(&wdg_join, WDG_SCROLL, 0);
-   sprintf(title, "%s:%d - %s:%d", ip_addr_ntoa(&curr_conn->L3_addr1, src), ntohs(curr_conn->L4_addr1),
+   snprintf(title, 64, "%s:%d - %s:%d", ip_addr_ntoa(&curr_conn->L3_addr1, src), ntohs(curr_conn->L4_addr1),
                                  ip_addr_ntoa(&curr_conn->L3_addr2, dst), ntohs(curr_conn->L4_addr2));
    wdg_set_title(wdg_join, title, WDG_ALIGN_LEFT);
    wdg_set_color(wdg_join, WDG_COLOR_TITLE, EC_COLOR_TITLE);
@@ -455,7 +454,7 @@ static void join_print(u_char *text, size_t len, struct ip_addr *L3_src)
    
    /* check the regex filter */
    if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, text, 0, NULL, 0) != 0) {
+       regexec(GBL_OPTIONS->regex, (const char*)text, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -486,7 +485,7 @@ static void join_print_po(struct packet_object *po)
    
    /* check the regex filter */
    if (GBL_OPTIONS->regex && 
-       regexec(GBL_OPTIONS->regex, po->DATA.disp_data, 0, NULL, 0) != 0) {
+       regexec(GBL_OPTIONS->regex, (const char*)po->DATA.disp_data, 0, NULL, 0) != 0) {
       return;
    }
    
@@ -572,7 +571,7 @@ static void curses_connection_inject(void)
    wdg_set_color(in, WDG_COLOR_FOCUS, EC_COLOR_FOCUS);
    wdg_set_color(in, WDG_COLOR_TITLE, EC_COLOR_MENU);
    wdg_input_size(in, 75, 12);
-   wdg_input_add(in, 1, 1, "Chars to be injected  :", injectbuf, 50, 10);
+   wdg_input_add(in, 1, 1, "Chars to be injected  :", (char*)injectbuf, 50, 10);
    wdg_input_set_callback(in, inject_user);
    
    wdg_draw_object(in);
@@ -585,7 +584,7 @@ static void inject_user(void)
    size_t len;
 
    /* escape the sequnces in the buffer */
-   len = strescape(injectbuf, injectbuf);
+   len = strescape((char*)injectbuf, (char*)injectbuf);
    
    /* check where to inject */
    if (wdg_c1->flags & WDG_OBJ_FOCUSED) {
@@ -633,7 +632,7 @@ static void inject_file(char *path, char *file)
    
    SAFE_CALLOC(filename, strlen(path)+strlen(file)+2, sizeof(char));
 
-   sprintf(filename, "%s/%s", path, file);
+   snprintf(filename, strlen(path)+strlen(file)+2, "%s/%s", path, file);
 
    /* open the file */
    if ((fd = open(filename, O_RDONLY | O_BINARY)) == -1) {

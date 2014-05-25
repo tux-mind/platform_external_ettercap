@@ -17,12 +17,11 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_manuf.c,v 1.13 2004/05/31 08:49:05 alor Exp $
 
 */
 
 /*
- * MFDBL: mac fingerprint batabase library.
+ * MFDBL: mac fingerprint database library.
  *
  * Copyright (c) 2002 Bonelli Nicola <awgn@antifork.org>
  *
@@ -82,7 +81,7 @@ struct entry {
 
 static void discard_macdb(void);
 int manuf_init(void);
-char * manuf_search(char *m);
+char * manuf_search(const char *m);
 
 /*****************************************/
 
@@ -127,7 +126,7 @@ int manuf_init(void)
 
    while (fgets(line, 80, f) != 0) {
 
-      if (sscanf(line, "%02X:%02X:%02X %80[^,\n],\n", &m1, &m2, &m3, name) != 4)
+      if (sscanf(line, "%02X%02X%02X %80[^,\n],\n", &m1, &m2, &m3, name) != 4)
          continue;
 
       mac[0] = (char) (m1);
@@ -155,7 +154,7 @@ int manuf_init(void)
 
 
 
-char * manuf_search(char *m)
+char * manuf_search(const char *m)
 {
    struct entry *l;
    char mac[4];

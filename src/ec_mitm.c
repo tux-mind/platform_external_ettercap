@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_mitm.c,v 1.16 2004/07/24 10:43:21 alor Exp $
 */
 
 #include <ec.h>
@@ -137,7 +136,7 @@ int mitm_start(void)
          if (GBL_OPTIONS->reversed)
             SEMIFATAL_ERROR("Reverse target matching can't be used with MITM attacks");
   
-         if (!GBL_IFACE->configured)
+         if (!GBL_IFACE->is_ready)
             SEMIFATAL_ERROR("MITM attacks can't be used on unconfigured interfaces");
          
          DEBUG_MSG("mitm_start: starting %s", e->mm->name);
@@ -193,6 +192,11 @@ void only_mitm(void)
    mitm_start();
 
    INSTANT_USER_MSG("Activated the mitm attack only... (press 'q' to exit)\n");
+
+   if (GBL_UI->type == UI_DAEMONIZE)
+       LOOP {
+           sleep(1);
+       }
   
    /* wait for user to exit */
    while (ch != 'q' && ch != 'Q') {

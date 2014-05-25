@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_socket.c,v 1.15 2004/08/10 23:35:35 alor Exp $
 */
 
 #include <ec.h>
@@ -33,6 +32,7 @@
 #endif
 
 #include <fcntl.h>
+#include <time.h>
 
 /* protos */
 
@@ -65,7 +65,9 @@ void set_blocking(int s, int set)
       ret |= O_NONBLOCK;
    
    /* set the flag */
-   fcntl (s, F_SETFL, ret);
+//   fcntl (s, F_SETFL, F_SETFD, FD_CLOEXEC, ret); //this solution BREAKS the socket (ssl mitm will not work)
+   fcntl(s, F_SETFL, ret);
+
 #endif   
 }
 
@@ -87,6 +89,12 @@ int open_socket(const char *host, u_int16 port)
    memset((char*)&sa_in, 0, sizeof(sa_in));
    sa_in.sin_family = AF_INET;
    sa_in.sin_port = htons(port);
+
+#if !defined(OS_WINDOWS)
+   struct timespec tm;
+   tm.tv_sec = 0;
+   tm.tv_nsec = (TSLEEP * 1000);
+#endif
 
    /* resolve the hostname */
    if ( (infh = gethostbyname(host)) != NULL )
@@ -112,7 +120,12 @@ int open_socket(const char *host, u_int16 port)
          err = GET_SOCK_ERRNO();
          if (err == EINPROGRESS || err == EALREADY || err == EWOULDBLOCK || err == EAGAIN) {
             /* sleep a quirk of time... */
+            DEBUG_MSG("open_socket: connect() retrying: %d", err);
+#if !defined(OS_WINDOWS)
+            nanosleep(&tm, NULL);
+#else
             usleep(TSLEEP);
+#endif
          }
       } else { 
          /* there was an error or the connect was successful */
@@ -168,7 +181,7 @@ int close_socket(int s)
 
 
 /* 
- * send a buffer thru the socket 
+ * send a buffer throught the socket
  */
 int socket_send(int s, const u_char *payload, size_t size)
 {

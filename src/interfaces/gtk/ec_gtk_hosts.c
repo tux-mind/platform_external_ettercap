@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_gtk_hosts.c,v 1.12 2004/10/10 13:49:51 daten Exp $
 */
 
 #include <ec.h>
@@ -72,7 +71,7 @@ void gtkui_scan(void)
 void gtkui_load_hosts(void)
 {
    GtkWidget *dialog;
-   char *filename;
+   const char *filename;
    int response = 0;
 
    DEBUG_MSG("gtk_load_hosts");
@@ -101,7 +100,7 @@ static void load_hosts(char *file)
    SAFE_CALLOC(tmp, strlen(file)+1, sizeof(char));
 
    /* get the current working directory */
-   getcwd(current, PATH_MAX); 
+   getcwd(current, PATH_MAX);
 
    /* we are opening a file in the current dir.
     * use the relative path, so we can open files
@@ -109,9 +108,9 @@ static void load_hosts(char *file)
     * is not traversable with ec_uid permissions
     */
    if (!strncmp(current, file, strlen(current)))
-      sprintf(tmp, "./%s", file+strlen(current));
+      snprintf(tmp, strlen(file)+1,"./%s", file+strlen(current));
    else
-      sprintf(tmp, "%s", file);
+      snprintf(tmp, strlen(file), "%s", file);
 
    DEBUG_MSG("load_hosts path == %s", tmp);
 

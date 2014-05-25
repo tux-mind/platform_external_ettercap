@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_format.c,v 1.18 2004/10/12 15:28:38 alor Exp $
 
 */
 
@@ -159,48 +158,61 @@ int hex_len(int len)
  * 0000: 4854 5450 2f31 2e31 2033 3034 204e 6f74  HTTP/1.1 304 Not
  * 0010: 204d 6f64 6966 6965 64                    Modified
  */
-
 int hex_format(const u_char *buf, size_t len, u_char *dst)
 {
    u_int i, j, jm, c;
    int dim = 0;
-  
+   char tmp[10];
+
+
+
    /* some sanity checks */
    if (len == 0 || buf == NULL) {
-      strcpy(dst, "");
+      strncpy((char*)dst, "", 1);
       return 0;
    }
-  
+
    /* empty the string */
    memset(dst, 0, hex_len(len));
-   
+
    for (i = 0; i < len; i += HEX_CHAR_PER_LINE) {
-           sprintf(dst, "%s %04x: ", dst, i );
+           dim += snprintf(tmp, 7, "%04x: ", i);
+           strncat(dst, tmp, 7);
+
            jm = len - i;
            jm = jm > HEX_CHAR_PER_LINE ? HEX_CHAR_PER_LINE : jm;
 
            for (j = 0; j < jm; j++) {
                    if ((j % 2) == 1) {
-                      sprintf(dst, "%s%02x ", dst, (u_char) buf[i+j]);
+                     dim += snprintf(tmp, 4, "%02x ", buf[i+j]);
+                     strncat(dst, tmp, 4);
                    } else {
-                      sprintf(dst, "%s%02x", dst, (u_char) buf[i+j]);
+                        dim += snprintf(tmp, 3, "%02x", buf[i+j]);
+                        strncat(dst, tmp, 3);
+
                    }
            }
            for (; j < HEX_CHAR_PER_LINE; j++) {
                    if ((j % 2) == 1) {
-                      strcat(dst, "   ");
+                      strcat((char*)dst, "   ");
+		      dim += 3;
                    } else {
-                      strcat(dst, "  ");
+                      strcat((char*)dst, "  ");
+		      dim += 2;
                    }
-           } 
-           strcat(dst, " ");
+           }
+           strcat((char*)dst, " ");
+           dim++;
 
            for (j = 0; j < jm; j++) {
-                   c = (u_char) buf[i+j];
+                  c = buf[i+j];
                    c = isprint(c) ? c : '.';
-                   dim = sprintf(dst, "%s%c", dst, c);
+                   dim += snprintf(tmp, 2, "%c" , c);
+                   strncat(dst, tmp, 2);
            }
-           strcat(dst, "\n");
+
+           strcat((char*)dst, "\n");
+ 	   dim++;
    }
 
    return dim + 1;
@@ -217,7 +229,7 @@ int ascii_format(const u_char *buf, size_t len, u_char *dst)
    
    /* some sanity checks */
    if (len == 0 || buf == NULL) {
-      strcpy(dst, "");
+      strncpy((char*)dst, "", 1);
       return 0;
    }
 
@@ -242,7 +254,7 @@ int text_format(const u_char *buf, size_t len, u_char *dst)
    
    /* some sanity checks */
    if (len == 0 || buf == NULL) {
-      strcpy(dst, "");
+      strncpy((char*)dst, "", 1);
       return 0;
    }
 
@@ -277,7 +289,7 @@ int ebcdic_format(const u_char *buf, size_t len, u_char *dst)
    
    /* some sanity checks */
    if (len == 0 || buf == NULL) {
-      strcpy(dst, "");
+      strncpy((char*)dst, "", 1);
       return 0;
    }
    
@@ -298,7 +310,7 @@ int html_format(const u_char *buf, size_t len, u_char *dst)
    
    /* some sanity checks */
    if (len == 0 || buf == NULL) {
-      strcpy(dst, "");
+      strncpy((char*)dst, "", 1);
       return 0;
    }
 
@@ -324,7 +336,7 @@ int bin_format(const u_char *buf, size_t len, u_char *dst)
 {
    /* some sanity checks */
    if (len == 0 || buf == NULL) {
-      strcpy(dst, "");
+      strncpy((char*)dst, "", 1);
       return 0;
    }
    
@@ -340,7 +352,7 @@ int bin_format(const u_char *buf, size_t len, u_char *dst)
 
 int zero_format(const u_char *buf, size_t len, u_char *dst)
 {
-   strcpy(dst, "");
+   strncpy((char*)dst, "", 1);
    return 0;
 }
 
@@ -353,7 +365,7 @@ int utf8_format(const u_char *buf, size_t len, u_char *dst)
 #ifndef HAVE_UTF8
    /* some sanity checks */
    if (len == 0 || buf == NULL) {
-      strcpy(dst, "");
+      strncpy(dst, "", 1);
       return 0;
    }
    
@@ -374,7 +386,7 @@ int utf8_format(const u_char *buf, size_t len, u_char *dst)
 
    /* some sanity checks */
    if (len == 0 || buf == NULL) {
-      strcpy(dst, "");
+      strncpy((char*)dst, "", 1);
       return 0;
    }
 
@@ -403,27 +415,27 @@ int utf8_format(const u_char *buf, size_t len, u_char *dst)
 int set_utf8_encoding(u_char *fromcode)
 {
 #ifndef HAVE_UTF8
-   USER_MSG("UTF-8 support not compiled in.");
+   USER_MSG("UTF-8 support not compiled in.\n");
    return ESUCCESS;
 #else
    iconv_t cd;
 
    DEBUG_MSG("set_utf8_encoding: %s", fromcode);
       
-   if (fromcode == NULL || strlen(fromcode) < 1)
+   if (fromcode == NULL || strlen((const char*)fromcode) < 1)
       return -EINVALID;
 
    SAFE_FREE(utf8_encoding);
 
    /* make sure encoding type is supported */
-   cd = iconv_open("UTF-8", fromcode);
+   cd = iconv_open("UTF-8", (const char*)fromcode);
    
    if (cd == (iconv_t)(-1))
       SEMIFATAL_ERROR("The conversion from %s to UTF-8 is not supported.", fromcode);
    
    iconv_close(cd);
 
-   utf8_encoding = strdup(fromcode);
+   utf8_encoding = strdup((const char*)fromcode);
 
    return ESUCCESS;
 #endif

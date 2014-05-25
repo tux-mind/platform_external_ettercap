@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_port_stealing.c,v 1.15 2004/11/04 09:23:02 alor Exp $
 */
 
 #include <ec.h>
@@ -26,6 +25,7 @@
 #include <ec_threads.h>
 #include <ec_ui.h>
 #include <ec_hook.h>
+#include <time.h>
 
 
 /* globals */
@@ -146,7 +146,7 @@ static int port_stealing_start(char *args)
       SEMIFATAL_ERROR("Port stealing needs a non empty hosts list.\n");
       
    /* Avoid sniffing loops. XXX - it remains even after mitm stopping */
-   capture_only_incoming(GBL_PCAP->pcap, GBL_LNET->lnet);
+   capture_only_incoming(GBL_IFACE->pcap, GBL_IFACE->lnet);
       
    /* Create the port stealing list from hosts list */   
    LIST_FOREACH(h, &GBL_HOSTLIST, next) {
@@ -180,7 +180,7 @@ static int port_stealing_start(char *args)
    harp->ar_pln = 4;
    harp->ar_op  = htons(ARPOP_REQUEST);
 
-   packet_create_object(&fake_po, fake_pck, FAKE_PCK_LEN);
+   packet_create_object(&fake_po, (u_char*)fake_pck, FAKE_PCK_LEN);
    
    /* Add the hooks:
     * - handle stealed packets (mark it as forwardable)
@@ -208,6 +208,12 @@ static void port_stealing_stop(void)
    struct packet_list *p, *tmp_p = NULL;
 
    int i;
+
+#if !defined(OS_WINDOWS)
+   struct timespec tm;
+   tm.tv_nsec = GBL_CONF->arp_storm_delay * 1000;
+   tm.tv_sec = 0;
+#endif
       
    DEBUG_MSG("port_stealing_stop");
    
@@ -236,7 +242,11 @@ static void port_stealing_stop(void)
    for (i=0; i<2; i++) {
       LIST_FOREACH(s, &steal_table, next) {
          send_arp(ARPOP_REQUEST, &GBL_IFACE->ip, GBL_IFACE->mac, &s->ip, MEDIA_BROADCAST);
-         usleep(GBL_CONF->arp_storm_delay * 1000);  
+#if !defined(OS_WINDOWS)
+         nanosleep(&tm, NULL);
+#else
+         usleep(GBL_CONF->arp_storm_delay*1000);
+#endif
       }      
    }
    
@@ -269,6 +279,12 @@ EC_THREAD_FUNC(port_stealer)
    ec_thread_init();
   
    heth = (struct eth_header *)fake_pck;
+
+#if !defined(OS_WINDOWS)
+   struct timespec tm;
+   tm.tv_nsec = GBL_CONF->port_steal_delay * 1000;
+   tm.tv_sec = 0;
+#endif
   
    /* never ending loop */
    LOOP {
@@ -281,10 +297,19 @@ EC_THREAD_FUNC(port_stealer)
          if (!s->wait_reply) {
             memcpy(heth->sha, s->mac, ETH_ADDR_LEN);
             send_to_L2(&fake_po); 
-            usleep(GBL_CONF->port_steal_delay * 1000);  
+#if !defined(OS_WINDOWS)
+            nanosleep(&tm, NULL);
+#else
+            usleep(GBL_CONF->port_steal_delay);
+#endif
          }
       }      
-      usleep(GBL_CONF->port_steal_delay * 1000);
+
+#if !defined(OS_WINDOWS)
+      nanosleep(&tm, NULL);
+#else
+      usleep(GBL_CONF->port_steal_delay);
+#endif
    }
    
    return NULL; 
@@ -358,6 +383,12 @@ static void send_queue(struct packet_object *po)
    struct eth_header *heth;
    int in_list, to_wait = 0;
 
+#if !defined(OS_WINDOWS)
+   struct timespec tm;
+   tm.tv_nsec = GBL_CONF->port_steal_send_delay * 1000;
+   tm.tv_sec = 0;
+#endif
+
    /* Check if it's an arp reply for us */
    if (memcmp(po->L2.dst, GBL_IFACE->mac, MEDIA_ADDR_LEN))
       return;
@@ -403,7 +434,11 @@ static void send_queue(struct packet_object *po)
 	      
                /* Sleep only if we have more than one packet to send */
                if (to_wait) 
+#if !defined(OS_WINDOWS)
+                  nanosleep(&tm, NULL);
+#else
                   usleep(GBL_CONF->port_steal_send_delay);
+#endif
                to_wait = 1;
             }
             /* Restart the stealing process for this host */

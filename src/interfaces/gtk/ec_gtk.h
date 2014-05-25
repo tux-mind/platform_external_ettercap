@@ -1,5 +1,4 @@
 
-/* $Id: ec_gtk.h,v 1.18 2004/10/12 21:43:03 daten Exp $ */
 
 #ifndef EC_GTK_H
 #define EC_GTK_H
@@ -74,7 +73,7 @@ extern void gtkui_show_stats(void);
 extern void toggle_resolve(void);
 extern void gtkui_vis_method(void);
 extern void gtkui_vis_regex(void);
-extern void gtkui_wep_key(void);
+extern void gtkui_wifi_key(void);
 
 /* ec_gtk_targets.c */
 extern void toggle_reverse(void);

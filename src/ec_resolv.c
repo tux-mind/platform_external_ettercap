@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_resolv.c,v 1.17 2004/07/12 19:57:26 alor Exp $
 */
 
 #include <ec.h>
@@ -64,7 +63,7 @@ int host_iptoa(struct ip_addr *ip, char *name)
    struct hostent *host = NULL;
    
    /* initialize the name */
-   strcpy(name, "");
+   strncpy(name, "", 1);
   
    /* sanity check */
    if (ip_addr_is_zero(ip))

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_gtk_view_profiles.c,v 1.10 2004/03/04 13:16:24 daten Exp $
 */
 
 #include <ec.h>
@@ -286,8 +285,13 @@ static void gtkui_profile_detail(void)
    else if (h->type == FP_UNKNOWN)
       snprintf(line, 200, " Type: \t\tunknown\n\n");
    gtkui_details_print(textbuf, line);
-      
-   
+
+   if (h->os)
+   {
+      snprintf(line, 200, " Observed OS:\t%s\n\n", h->os);
+      gtkui_details_print(textbuf, line);
+   }
+
    snprintf(line, 200, " Fingerprint: \t%s\n", h->fingerprint);
    gtkui_details_print(textbuf, line);
    if (fingerprint_search(h->fingerprint, os) == ESUCCESS)

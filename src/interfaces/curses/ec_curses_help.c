@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_curses_help.c,v 1.1 2004/10/12 14:27:28 alor Exp $
 */
 
 #include <ec.h>
@@ -37,7 +36,7 @@ void help_etterlog(void);
 
 /* globals */
 
-struct wdg_menu menu_help[] = { {"Help",              0,       "",    NULL},
+struct wdg_menu menu_help[] = { {"?",                 0,       "",    NULL},
                                 {"ettercap"  ,        0,       "",    help_ettercap},
                                 {"curses gui"  ,      0,       "",    help_curses},
                                 {"plugins"  ,         0,       "",    help_plugins},

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_profiles.c,v 1.43 2004/12/21 20:27:15 alor Exp $
 */
 
 #include <ec.h>
@@ -48,6 +47,7 @@ static int profile_add_host(struct packet_object *po);
 static int profile_add_user(struct packet_object *po);
 static void update_info(struct host_profile *h, struct packet_object *po);
 static void update_port_list(struct host_profile *h, struct packet_object *po);
+static void update_port_list_with_advertised(struct host_profile *h, uint8_t L4_proto, uint16_t L4_src);
 static void set_gateway(u_char *L2_addr);
 
 void * profile_print(int mode, void *list, char **desc, size_t len);
@@ -70,6 +70,9 @@ void __init profiles_init(void)
    
    /* add the hook for ICMP packets */
    hook_add(HOOK_PACKET_ICMP, &profile_parse);
+
+   /* add the hook for ICMPv6 packets */
+   hook_add(HOOK_PACKET_ICMP6, &profile_parse);
    
    /* add the hook for DHCP packets */
    hook_add(HOOK_PROTO_DHCP_PROFILE, &profile_parse);
@@ -119,7 +122,8 @@ void profile_parse(struct packet_object *po)
     *    - DNS packets that contain GW information (they use fake icmp po)
     */
    if ( po->L3.proto == htons(LL_TYPE_ARP) ||                     /* arp packets */
-        po->L4.proto == NL_TYPE_ICMP                              /* icmp packets */
+        po->L4.proto == NL_TYPE_ICMP ||                           /* icmp packets */
+        po->L4.proto == NL_TYPE_ICMP6
       )
       profile_add_host(po);
       
@@ -129,7 +133,8 @@ void profile_parse(struct packet_object *po)
     */
    if ( is_open_port(po->L4.proto, po->L4.src, po->L4.flags) ||   /* src port is open */
         strcmp(po->PASSIVE.fingerprint, "") ||                    /* collected fingerprint */  
-        po->DISSECTOR.banner                                      /* banner */
+        po->DISSECTOR.banner ||                                     /* banner */
+        po->DISSECTOR.os
       )
       profile_add_host(po);
 
@@ -141,10 +146,15 @@ void profile_parse(struct packet_object *po)
     */
    if ( po->DISSECTOR.user ||                               /* user */
         po->DISSECTOR.pass ||                               /* pass */
-        po->DISSECTOR.info                                  /* info */
+        po->DISSECTOR.info                                 /* info */
       )
       profile_add_user(po);
-   
+
+   if ( po->DISSECTOR.advertised_port != 0 &&
+        po->DISSECTOR.advertised_proto != 0
+      )
+      profile_add_host(po);
+
    return;
 }
 
@@ -166,6 +176,11 @@ static int profile_add_host(struct packet_object *po)
     * only in the latter.
     */
    if (ip_addr_is_zero(&po->L3.src))
+      return 0;
+   
+   /* We don't need a profile on ourselves, do we? */
+   if(!memcmp(&po->L2.src, &GBL_IFACE->mac, MEDIA_ADDR_LEN) ||
+      !memcmp(&po->L2.src, &GBL_BRIDGE->mac, MEDIA_ADDR_LEN))
       return 0;
    
    /* 
@@ -268,7 +283,10 @@ static void update_info(struct host_profile *h, struct packet_object *po)
       
    /* get the hostname */
    host_iptoa(&po->L3.src, h->hostname);
-   
+
+   if (po->DISSECTOR.os && h->os == NULL)
+      h->os = strdup(po->DISSECTOR.os);
+
    /* 
     * update the fingerprint only if there isn't a previous one
     * or if the previous fingerprint was an ACK
@@ -281,6 +299,9 @@ static void update_info(struct host_profile *h, struct packet_object *po)
 
    /* add the open port */
    update_port_list(h, po);
+
+   if (po->DISSECTOR.advertised_proto != 0 && po->DISSECTOR.advertised_port != 0)
+      update_port_list_with_advertised(h, po->DISSECTOR.advertised_proto, po->DISSECTOR.advertised_port);
 }
 
 
@@ -362,6 +383,43 @@ static void update_port_list(struct host_profile *h, struct packet_object *po)
    
 }
 
+static void update_port_list_with_advertised(struct host_profile *h, uint8_t L4_proto, uint16_t L4_src)
+{
+   struct open_port *o;
+   struct open_port *p;
+   struct open_port *last = NULL;
+
+   /* search for an existing port */
+   LIST_FOREACH(o, &(h->open_ports_head), next) {
+      if (o->L4_proto == L4_proto && o->L4_addr == L4_src) {
+          // already logged
+         return;
+      }
+   }
+
+   DEBUG_MSG("update_port_list_with_advertised");
+
+   /* create a new entry */
+   SAFE_CALLOC(o, 1, sizeof(struct open_port));
+
+   o->L4_proto = L4_proto;
+   o->L4_addr = L4_src;
+
+   /* search the right point to inser it (ordered ascending) */
+   LIST_FOREACH(p, &(h->open_ports_head), next) {
+      if ( ntohs(p->L4_addr) > ntohs(o->L4_addr) )
+         break;
+      last = p;
+   }
+
+   /* insert in the right position */
+   if (LIST_FIRST(&(h->open_ports_head)) == NULL)
+      LIST_INSERT_HEAD(&(h->open_ports_head), o, next);
+   else if (p != NULL)
+      LIST_INSERT_BEFORE(p, o, next);
+   else
+      LIST_INSERT_AFTER(last, o, next);
+}
 /* 
  * update the users list
  */
@@ -499,7 +557,7 @@ static void profile_purge(int flags)
    struct host_profile *h, *tmp_h = NULL;
    struct open_port *o, *tmp_o = NULL;
    struct active_user *u, *tmp_u = NULL;
-   
+
    PROFILE_LOCK;
 
    TAILQ_FOREACH_SAFE(h, &GBL_PROFILES, next, tmp_h) {
@@ -523,6 +581,7 @@ static void profile_purge(int flags)
             LIST_REMOVE(o, next);
             SAFE_FREE(o);
          }
+         SAFE_FREE(h->os);
          TAILQ_REMOVE(&GBL_PROFILES, h, next);
          SAFE_FREE(h);
       }
@@ -636,7 +695,7 @@ int profile_dump_to_file(char *filename)
    DEBUG_MSG("profile_dump_to_file: %s", filename);
 
    /* append the extension */
-   sprintf(eci, "%s.eci", filename);
+   snprintf(eci, strlen(filename)+5, "%s.eci", filename);
    
    if (GBL_OPTIONS->compress)
       fd.type = LOG_COMPRESSED;

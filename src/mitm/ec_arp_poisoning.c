@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_arp_poisoning.c,v 1.31 2004/11/04 09:23:00 alor Exp $
 */
 
 #include <ec.h>
@@ -25,6 +24,7 @@
 #include <ec_send.h>
 #include <ec_threads.h>
 #include <ec_ui.h>
+#include <time.h>
 
 /* globals */
 
@@ -37,8 +37,8 @@
  */
 
 /* these are LIST_HEAD (look in ec_mitm for the declaration) */
-struct arp_groups arp_group_one;
-struct arp_groups arp_group_two;
+struct hosts_group arp_group_one;
+struct hosts_group arp_group_two;
 
 static int poison_oneway;
 
@@ -95,7 +95,7 @@ static int arp_poisoning_start(char *args)
          } else if (!strcasecmp(p, "oneway")) {
             poison_oneway = 1; 
          } else {
-            SEMIFATAL_ERROR("ARP poisoning: paramenter incorrect.\n");
+            SEMIFATAL_ERROR("ARP poisoning: parameter incorrect.\n");
          }
       }
    }
@@ -149,6 +149,12 @@ static void arp_poisoning_stop(void)
    
    /* destroy the poisoner thread */
    pid = ec_thread_getpid("arp_poisoner");
+
+#if !defined(OS_WINDOWS)
+   struct timespec tm, ts;
+   tm.tv_nsec = GBL_CONF->arp_storm_delay * 1000;
+   tm.tv_sec = 0;
+#endif
    
    /* the thread is active or not ? */
    if (!pthread_equal(pid, EC_PTHREAD_NULL))
@@ -191,13 +197,23 @@ static void arp_poisoning_stop(void)
                if (!poison_oneway)
                   send_arp(ARPOP_REQUEST, &g1->ip, g1->mac, &g2->ip, g2->mac); 
             }
-            
-            usleep(GBL_CONF->arp_storm_delay * 1000);
+           
+#if !defined(OS_WINDOWS) 
+            nanosleep(&tm, NULL);
+#else
+            usleep(GBL_CONF->arp_storm_delay);
+#endif
          }
       }
       
       /* sleep the correct delay, same as warm_up */
-      sleep(GBL_CONF->arp_poison_warm_up);
+#if !defined(OS_WINDOWS)
+      ts.tv_sec = GBL_CONF->arp_poison_warm_up;
+      ts.tv_nsec = 0;
+      nanosleep(&ts, NULL);
+#else
+      usleep(GBL_CONF->arp_poison_warm_up*1000);
+#endif
    }
    
    /* delete the elements in the first list */
@@ -226,6 +242,12 @@ EC_THREAD_FUNC(arp_poisoner)
 {
    int i = 1;
    struct hosts_list *g1, *g2;
+
+#if !defined(OS_WINDOWS)
+   struct timespec tm, ts;
+   tm.tv_nsec = GBL_CONF->arp_storm_delay * 1000;
+   tm.tv_sec = 0;
+#endif
    
    /* init the thread and wait for start up */
    ec_thread_init();
@@ -273,8 +295,12 @@ EC_THREAD_FUNC(arp_poisoner)
                if (!poison_oneway)
                   send_arp(ARPOP_REQUEST, &g1->ip, GBL_IFACE->mac, &g2->ip, g2->mac); 
             }
-           
-            usleep(GBL_CONF->arp_storm_delay * 1000);
+          
+#if !defined(OS_WINDOWS) 
+            nanosleep(&tm, NULL);
+#else
+            usleep(GBL_CONF->arp_storm_delay);
+#endif
          }
       }
       
@@ -284,10 +310,22 @@ EC_THREAD_FUNC(arp_poisoner)
        * then use normal delay
        */
       if (i < 5) {
-         sleep(GBL_CONF->arp_poison_warm_up);
+#if !defined(OS_WINDOWS)
+         ts.tv_sec = GBL_CONF->arp_poison_warm_up;
+         ts.tv_nsec = 0;
+         nanosleep(&ts, NULL);
+#else
+         usleep(GBL_CONF->arp_poison_warm_up*1000);
+#endif
          i++;
       } else
-         sleep(GBL_CONF->arp_poison_delay);
+#if !defined(OS_WINDOWS)
+         ts.tv_sec = GBL_CONF->arp_poison_delay;
+         ts.tv_nsec = 0;
+	 nanosleep(&ts, NULL);
+#else
+         usleep(GBL_CONF->arp_poison_delay);
+#endif
    }
    
    return NULL; 
@@ -326,7 +364,7 @@ static int create_silent_list(void)
       
       USER_MSG(" TARGET 1 : %-15s %17s\n", ip_addr_ntoa(&i->ip, tmp), mac_addr_ntoa(GBL_TARGET1->mac, tmp2));
       
-      /* copy the informations */
+      /* copy the information */
       memcpy(&h->ip, &i->ip, sizeof(struct ip_addr));
       memcpy(&h->mac, &GBL_TARGET1->mac, MEDIA_ADDR_LEN);
       
@@ -353,7 +391,7 @@ static int create_silent_list(void)
       }
       USER_MSG(" TARGET 2 : %-15s %17s\n", ip_addr_ntoa(&j->ip, tmp), mac_addr_ntoa(GBL_TARGET2->mac, tmp2));
       
-      /* copy the informations */
+      /* copy the information */
       memcpy(&g->ip, &j->ip, sizeof(struct ip_addr));
       memcpy(&g->mac, &GBL_TARGET2->mac, MEDIA_ADDR_LEN);
       

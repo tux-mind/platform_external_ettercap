@@ -17,12 +17,12 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_main.c,v 1.66 2004/11/04 10:29:06 alor Exp $
 */
 
 #include <ec.h>
 #include <ec_version.h>
 #include <ec_globals.h>
+#include <ec_network.h>
 #include <ec_signals.h>
 #include <ec_parser.h>
 #include <ec_threads.h>
@@ -40,13 +40,15 @@
 #include <ec_conf.h>
 #include <ec_mitm.h>
 #include <ec_sslwrap.h>
+#ifdef HAVE_EC_LUA
+#include <ec_lua.h>
+#endif
 
 /* global vars */
 
 
 /* protos */
 
-void clean_exit(int errcode);
 static void drop_privs(void);
 static void time_check(void);
 
@@ -63,11 +65,14 @@ int main(int argc, char *argv[])
   
    GBL_PROGRAM = strdup(EC_PROGRAM);
    GBL_VERSION = strdup(EC_VERSION);
-   SAFE_CALLOC(GBL_DEBUG_FILE, strlen(EC_PROGRAM) + strlen(EC_VERSION) + strlen("_debug.log") + 1, sizeof(char));
-   sprintf(GBL_DEBUG_FILE, "%s%s_debug.log", GBL_PROGRAM, EC_VERSION);
+   SAFE_CALLOC(GBL_DEBUG_FILE, strlen(EC_PROGRAM) + strlen("-") + strlen(EC_VERSION) + strlen("_debug.log") + 1, sizeof(char));
+   sprintf(GBL_DEBUG_FILE, "%s-%s_debug.log", GBL_PROGRAM, EC_VERSION);
    
    DEBUG_INIT();
    DEBUG_MSG("main -- here we go !!");
+
+   /* initialize the filter mutex */
+   filter_init_mutex();
    
    /* register the main thread as "init" */
    ec_thread_register(EC_PTHREAD_SELF, "init", "initialization phase");
@@ -87,7 +92,7 @@ int main(int argc, char *argv[])
 
    /* load the configuration file */
    load_conf();
-   
+  
    /* 
     * get the list of available interfaces 
     * 
@@ -100,30 +105,29 @@ int main(int argc, char *argv[])
    /* initialize the user interface */
    ui_init();
    
-   /* initialize libpcap */
-   capture_init();
-
-   /* initialize libnet (the function contain all the checks) */
-   send_init();
- 
-   /* get hardware infos */
-   get_hw_info();
- 
+   /* initialize the network subsystem */
+   network_init();
+   
    /* 
     * always disable the kernel ip forwarding (except when reading from file).
     * the forwarding will be done by ettercap.
     */
-   if (!GBL_OPTIONS->read && !GBL_OPTIONS->unoffensive && !GBL_OPTIONS->only_mitm)
+   if(!GBL_OPTIONS->read && !GBL_OPTIONS->unoffensive && !GBL_OPTIONS->only_mitm) {
       disable_ip_forward();
-      
-   /* binds ports and set redirect for ssl wrapper */
-   if (!GBL_OPTIONS->read && !GBL_OPTIONS->unoffensive && !GBL_OPTIONS->only_mitm && GBL_SNIFF->type == SM_UNIFIED)
-      ssl_wrap_init();
+	
+#ifdef OS_LINUX
+      if (!GBL_OPTIONS->read)
+      	disable_interface_offload();
+#endif
+      /* binds ports and set redirect for ssl wrapper */
+      if(GBL_SNIFF->type == SM_UNIFIED && GBL_OPTIONS->ssl_mitm)
+         ssl_wrap_init();
+   }
    
    /* 
     * drop root privileges 
-    * we have alread opened the sockets with high privileges
-    * we don't need any more root privs.
+    * we have already opened the sockets with high privileges
+    * we don't need anymore root privs.
     */
    drop_privs();
 
@@ -147,8 +151,13 @@ int main(int argc, char *argv[])
    /* load http known fileds for user/pass */
    http_fields_init();
 
+#ifdef HAVE_EC_LUA
+   /* Initialize lua */
+   ec_lua_init();
+#endif
+
    /* set the encoding for the UTF-8 visualization */
-   set_utf8_encoding(GBL_CONF->utf8_encoding);
+   set_utf8_encoding((u_char*)GBL_CONF->utf8_encoding);
   
    /* print all the buffered messages */
    if (GBL_UI->type == UI_TEXT)
@@ -176,22 +185,12 @@ int main(int argc, char *argv[])
  * reached only when the UI is shutted down 
  ********************************************/
 
-   /* flush the exit message */
-   ui_msg_flush(MSG_ALL);
-   
-   /* stop the mitm attack */
-   mitm_stop();
+   /* Call all the proper stop methods to ensure
+    * that no matter what UI was selected, everything is 
+    * turned off gracefully */
+   clean_exit(0);
 
-   /* terminate the sniffing engine */
-   EXECUTE(GBL_SNIFF->cleanup);
-   
-   /* kill all the running threads but the current */
-   ec_thread_kill_all();
-  
-   /* clean up the UI */
-   ui_cleanup();
-
-   return 0;
+   return 0; //Never reaches here
 }
 
 
@@ -244,34 +243,12 @@ static void drop_privs(void)
 }
 
 
-/*
- * cleanly exit from the program
- */
-
-void clean_exit(int errcode)
-{
-   DEBUG_MSG("clean_exit: %d", errcode);
-  
-   INSTANT_USER_MSG("\nTerminating %s...\n", GBL_PROGRAM);
-
-   /* kill all the running threads but the current */
-   ec_thread_kill_all();
-
-   /* close the UI */
-   ui_cleanup();
-
-   /* call all the ATEXIT functions */
-   exit(errcode);
-}
-
-
 static void time_check(void)
 {
    /* 
     * a nice easter egg... 
     * just to waste some time of code reviewers... ;) 
-    *
-    * and no, you can't simply remove this code, you'll break the license...
+    * ALoR, keeping this for you buddy! :)
     *
     * trust me, it's not evil ;) only a boring afternoon, and nothing to do...
     */
@@ -285,7 +262,7 @@ static void time_check(void)
    "(\bm\x19m\bz\x19x\b(A2\x12s\x1d=X5T=Q&G5Pp\x03l\n~\th\x1a\x7f_dMG\x06hH-@"
    "!H$\x04s\x1av\x1a:X=\x1d|\f|\x0ek\ba\0t\x11u[u[{^-m\fb\x16\x7f\x19v\x04oA"
    "\x2e\\;1;K9\\/\\|9w#f4\x1a\x34\x1a\x1a";for(_=(1<<7)-(1<<3)-(1<<2)+1;_>0;_
-   --)T0Q[_]=T0Q[_]^T0Q[_-1];write(1,dMG,1);while(__++<1<<5)printf("%c",(1<<5)
+   --)T0Q[_]=T0Q[_]^T0Q[_-1];if(write(1,dMG,1));while(__++<1<<5)printf("%c",(1<<5)
    +(1<<3)+(1<<1));X5T[U4M].dMG=ntohl(X5T[U4M].dMG);printf(dMG,&X5T[U4M].dMG);
    while(--__) printf("%c",(1<<6)-(1<<4)-(1<<3)+(1<<1)); printf(T0Q,&X5T[U4M].
    dMG);getchar();break;}}

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_ui.c,v 1.30 2004/09/28 13:50:37 alor Exp $
 */
 
 #include <ec.h>
@@ -78,7 +77,9 @@ void ui_start(void)
    if (GBL_UI->initialized)
       EXECUTE(GBL_UI->start);
    else
+   {
       DEBUG_MSG("ui_start called initialized");
+   }
 }
 
 /* called to end the user interface */
@@ -101,6 +102,14 @@ int ui_progress(char *title, int value, int max)
    return UI_PROGRESS_UPDATED;
 }
 
+/* send an update notification */
+void ui_update(int target)
+{
+   if(GBL_UI->update) {
+      DEBUG_MSG("ui_update");
+      GBL_UI->update(target);
+   }
+}
 
 /*
  * the FATAL_MSG error handling function
@@ -251,15 +260,24 @@ void ui_input(const char *title, char *input, size_t n, void (*callback)(void))
 int ui_msg_flush(int max)
 {
    int i = 0;
+   int old = 0;
    struct ui_message *msg;
-   
+  
+
+   /* sanity checks */
+   if (!GBL_UI->initialized)
+      return 0;
+     
+   if (STAILQ_EMPTY(&messages_queue))
+	return 0; 
+
+   // don't allow the thread to cancel while holding the ui mutex
+   pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old);
+
    /* the queue is updated by other threads */
    UI_MSG_LOCK;
    
-   /* sanity check */
-   if (!GBL_UI->initialized)
-      return 0;
-      
+
    while ( (msg = STAILQ_FIRST(&messages_queue)) != NULL) {
 
       /* diplay the message */
@@ -276,7 +294,9 @@ int ui_msg_flush(int max)
    }
    
    UI_MSG_UNLOCK;
-   
+
+   pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old);
+
    /* returns the number of displayed messages */
    return i;
    
@@ -341,6 +361,8 @@ void ui_register(struct ui_ops *ops)
    
    BUG_IF(ops->progress == NULL);
    GBL_UI->progress = ops->progress;
+
+   GBL_UI->update = ops->update;
 
    GBL_UI->type = ops->type;
 }

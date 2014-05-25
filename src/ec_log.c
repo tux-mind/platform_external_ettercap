@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_log.c,v 1.41 2004/09/30 16:01:45 alor Exp $
 */
 
 #include <ec.h>
@@ -45,10 +44,10 @@ static struct log_fd fdi;
 
 int set_loglevel(int level, char *filename);
 int set_msg_loglevel(int level, char *filename);
-static void log_stop(void);
 
 int log_open(struct log_fd *fd, char *filename);
 void log_close(struct log_fd *fd);
+void log_stop(void);
 
 int log_write_header(struct log_fd *fd, int type);
 
@@ -97,8 +96,8 @@ int set_loglevel(int level, char *filename)
       USER_MSG("*********************************************************\n\n");
    }
    
-   sprintf(eci, "%s.eci", filename);
-   sprintf(ecp, "%s.ecp", filename);
+   snprintf(eci, strlen(filename)+5, "%s.eci", filename);
+   snprintf(ecp, strlen(filename)+5, "%s.ecp", filename);
    
    memset(&fdp, 0, sizeof(struct log_fd));
    memset(&fdi, 0, sizeof(struct log_fd));
@@ -155,7 +154,7 @@ int set_loglevel(int level, char *filename)
          break;
    }
 
-   atexit(&log_stop);
+   atexit(log_stop);
 
    return ESUCCESS;
 }
@@ -163,7 +162,7 @@ int set_loglevel(int level, char *filename)
 /*
  * removes the hook points and closes the log files
  */
-static void log_stop(void)
+void log_stop(void)
 {
    DEBUG_MSG("log_stop");
    
@@ -190,7 +189,7 @@ int log_open(struct log_fd *fd, char *filename)
       if (fd->cfd == NULL)
          SEMIFATAL_ERROR("%s", gzerror(fd->cfd, &zerr));
    } else {
-      fd->fd = open(filename, O_CREAT | O_TRUNC | O_RDWR | O_BINARY);
+      fd->fd = open(filename, O_CREAT | O_TRUNC | O_RDWR | O_BINARY, S_IRUSR | S_IWUSR);
       if (fd->fd == -1)
          SEMIFATAL_ERROR("Can't create %s: %s", filename, strerror(errno));
    }
@@ -245,7 +244,7 @@ static void log_packet(struct packet_object *po)
 
    /* the regex is set, respect it */
    if (GBL_OPTIONS->regex) {
-      if (regexec(GBL_OPTIONS->regex, po->DATA.disp_data, 0, NULL, 0) == 0)
+      if (regexec(GBL_OPTIONS->regex, (const char*)po->DATA.disp_data, 0, NULL, 0) == 0)
          log_write_packet(&fdp, po);
    } else {
       /* if no regex is set, dump all the packets */
@@ -382,7 +381,7 @@ void log_write_packet(struct log_fd *fd, struct packet_object *po)
 
 
 /*
- * log passive informations
+ * log passive information
  *
  * hi is the source
  * hid is the dest, used to log password.
@@ -457,7 +456,7 @@ void log_write_info(struct log_fd *fd, struct packet_object *po)
    hi.type = po->PASSIVE.flags;
 
    /* calculate if the dest is local or not */
-   switch (ip_addr_is_local(&po->L3.dst)) {
+   switch (ip_addr_is_local(&po->L3.dst, NULL)) {
       case ESUCCESS:
          hid.type |= FP_HOST_LOCAL;
          break;
@@ -469,7 +468,7 @@ void log_write_info(struct log_fd *fd, struct packet_object *po)
          break;
    }
    
-   /* set account informations */
+   /* set account information */
    hid.failed = po->DISSECTOR.failed;
    memcpy(&hid.client, &po->L3.src, sizeof(struct ip_addr));
    
@@ -488,7 +487,7 @@ void log_write_info(struct log_fd *fd, struct packet_object *po)
   
    /* check if the packet is interesting... else return */
    if (hi.L4_addr == 0 &&                 // the port is not open
-       !strcmp(hi.fingerprint, "") &&     // no fingerprint
+       !strcmp((char*)hi.fingerprint, "") &&     // no fingerprint
        hid.var.user_len == 0 &&           // no user and pass infos...
        hid.var.pass_len == 0 &&
        hid.var.info_len == 0 &&

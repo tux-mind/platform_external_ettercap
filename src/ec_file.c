@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_file.c,v 1.13 2004/07/12 19:57:26 alor Exp $
 */
 
 #include <ec.h>
@@ -44,7 +43,7 @@ char * get_full_path(const char *dir, const char *file)
    SAFE_CALLOC(filename, len, sizeof(char));
    
    if (!strcmp(dir, "etc"))
-      snprintf(filename, len, "%s/%s", INSTALL_SYSCONFDIR, file);
+      snprintf(filename, len, "%s/%s/%s", INSTALL_SYSCONFDIR, EC_PROGRAM, file);
    else if (!strcmp(dir, "share"))
       snprintf(filename, len, "%s/%s/%s", INSTALL_DATADIR, EC_PROGRAM, file);
 
@@ -70,7 +69,7 @@ char * get_local_path(const char *file)
 
    SAFE_CALLOC(filename, strlen(self_root) + strlen("/share/") + strlen(file) + 1, sizeof(char));
    
-   sprintf(filename, "%s/share/%s", self_root, file);
+   snprintf(filename, strlen(self_root)+strlen("/share/") + strlen(file) + 1, "%s/share/%s", self_root, file);
    
    DEBUG_MSG("get_local_path -- %s", filename);
    

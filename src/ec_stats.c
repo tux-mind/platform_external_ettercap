@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_stats.c,v 1.9 2004/09/13 16:02:30 alor Exp $
 */
 
 #include <ec.h>
@@ -79,7 +78,6 @@ void stats_half_start(struct half_stats *hs)
 void stats_half_end(struct half_stats *hs, u_int32 len)
 {
    struct timeval diff;
-   float time; 
    float ttime;
    float ptime;
 
@@ -91,7 +89,6 @@ void stats_half_end(struct half_stats *hs, u_int32 len)
    time_add(&hs->tpar, &diff, &hs->tpar);
 
    /* calculate the rate (packet/time) */
-   time = diff.tv_sec + diff.tv_usec/1.0e6;
    ttime = hs->ttot.tv_sec + hs->ttot.tv_usec/1.0e6;
    ptime = hs->tpar.tv_sec + hs->tpar.tv_usec/1.0e6;
 
@@ -140,7 +137,7 @@ void stats_wipe(void)
    memset(&GBL_STATS->th, 0, sizeof(struct half_stats));
 
    /* now the global stats */
-   pcap_stats(GBL_PCAP->pcap, &ps);
+   pcap_stats(GBL_IFACE->pcap, &ps);
 
    /* XXX - fix this with libpcap 0.8.2 */
 #ifndef OS_LINUX
@@ -172,24 +169,13 @@ void stats_update(void)
     * statistics are available only in live capture
     * no statistics are stored in savefiles
     */
-   pcap_stats(GBL_PCAP->pcap, &ps);
+   pcap_stats(GBL_IFACE->pcap, &ps);
    /* get the statistics for Layer 3 since we forward packets here */
-   libnet_stats(GBL_LNET->lnet_L3, &ls);
+   libnet_stats(GBL_LNET->lnet_IP4, &ls);
       
-#ifdef OS_LINUX
-   /* 
-    * add to the previous value, since every call
-    * to pcap_stats reset the counter (hope that will be fixed soon)
-    * XXX - fixed in libpcap cvs
-    */
-   GBL_STATS->ps_recv += ps.ps_recv;
-   GBL_STATS->ps_drop += ps.ps_drop;
-   GBL_STATS->ps_ifdrop += ps.ps_ifdrop;
-#else
    /* on systems other than linux, the counter is not reset */ 
    GBL_STATS->ps_recv = ps.ps_recv - GBL_STATS->ps_recv_delta;
    GBL_STATS->ps_drop = ps.ps_drop - GBL_STATS->ps_drop_delta;
-#endif
 
    /* from libnet */
    GBL_STATS->ps_sent = ls.packets_sent - GBL_STATS->ps_sent_delta;

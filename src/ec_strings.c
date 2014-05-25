@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_strings.c,v 1.14 2004/07/20 09:53:53 alor Exp $
 */
 
 #include <ec.h>
@@ -283,7 +282,7 @@ int str_replace(char **text, const char *s, const char *d)
       if (diff > 0)
          size = strlen(q) + diff + 1;
       else 
-         size = strlen(q);
+         size = strlen(q) + 1;
      
       SAFE_REALLOC(*text, size);
       
@@ -295,6 +294,8 @@ int str_replace(char **text, const char *s, const char *d)
        */
       p = strstr(q, s);
 
+      if (p==NULL)
+		continue;
       /* do the actual replacement */
       memmove(p + dlen, p + slen, strlen(p + slen) + 1);
       memcpy(p, d, dlen);
@@ -328,7 +329,7 @@ size_t strlen_utf8(const char *s)
  */
 char * ec_strtok(char *s, const char *delim, char **ptrptr)
 {
-#ifdef HAVE_STRTOK_R
+#ifdef HAVE_STRTOK_R 
    return strtok_r(s, delim, ptrptr);
 #else
    #warning unsafe strtok
@@ -345,6 +346,10 @@ char * ec_strtok(char *s, const char *delim, char **ptrptr)
 char getchar_buffer(char **buf)
 {
    char ret;
+
+#if !defined(OS_WINDOWS)
+   struct timespec ts;
+#endif
 
    DEBUG_MSG("getchar_buffer: %s", *buf);
    
@@ -364,13 +369,21 @@ char getchar_buffer(char **buf)
 
          /* get the number of seconds to wait */
          time = atoi(*buf + 2);
+
+#if !defined(OS_WINDOWS)
+         ts.tv_sec = time;
+         ts.tv_nsec = 0;
+#endif
          
          DEBUG_MSG("getchar_buffer: sleeping %d secs", time);
 
          /* move the buffer after the s(x) */
          *buf = p + 1;
-      
-         sleep(time);
+#if !defined(OS_WINDOWS) 
+         nanosleep(&ts, NULL);
+#else
+         usleep(time*1000);
+#endif
       }
    }
    
@@ -383,6 +396,37 @@ char getchar_buffer(char **buf)
    DEBUG_MSG("getchar_buffer: returning %c", ret);
    
    return ret;
+}
+
+/* convert a string of hex values into an array of bytes */
+int str_hex_to_bytes(char *string, u_char *bytes)
+{
+   char value[3]; /* two for the hex and the NULL terminator */
+   unsigned int value_bin;
+   u_int i;
+
+   for (i = 0; i < strlen(string); i++) {
+      strncpy(value, string + i*2, 2);
+      if (sscanf(value, "%02X", &value_bin) != 1)
+         return -EINVALID;
+      bytes[i] = value_bin & 0x000000FF;
+   }
+
+   return 0;
+}
+
+
+/* print a binary string in hex format */
+char * str_tohex(u_char *bin, size_t len, char *dst, size_t dst_len)
+{
+   size_t i;
+
+   memset(dst, 0, dst_len);
+
+   for (i = 0; i < len; i++)
+      sprintf(dst + i*2, "%02X", bin[i]);
+
+   return dst;
 }
 
 /* EOF */

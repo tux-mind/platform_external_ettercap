@@ -17,22 +17,24 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_signals.c,v 1.28 2004/07/29 09:46:47 alor Exp $
 */
 
 #include <ec.h>
 #include <ec_version.h>
 #include <ec_ui.h>
 #include <ec_mitm.h>
+#include <ec_log.h>
 #include <ec_threads.h>
 
 #include <signal.h>
 
+#ifdef HAVE_EC_LUA
+#include <ec_lua.h>
+#endif
+
 #ifndef OS_WINDOWS
    #include <sys/resource.h>
    #include <sys/wait.h>
-#else
-   #undef SIGSEGV  /* Don't use this yet */
 #endif
 
 typedef void handler_t(int);
@@ -42,9 +44,9 @@ typedef void handler_t(int);
 void signal_handler(void);
 
 static handler_t *signal_handle(int signo, handler_t *handler, int flags);
-static RETSIGTYPE signal_SEGV(int sig);
-static RETSIGTYPE signal_TERM(int sig);
-static RETSIGTYPE signal_CHLD(int sig);
+static void signal_SEGV(int sig);
+static void signal_TERM(int sig);
+static void signal_CHLD(int sig);
 
 /*************************************/
 
@@ -115,7 +117,7 @@ static handler_t *signal_handle(int signo, handler_t *handler, int flags)
 /*
  * received when something goes wrong ;)
  */
-static RETSIGTYPE signal_SEGV(int sig)
+static void signal_SEGV(int sig)
 {
 #ifdef DEBUG
 
@@ -155,6 +157,13 @@ static RETSIGTYPE signal_SEGV(int sig)
    fprintf (stderr, "============================================================================\n");
    
    fprintf (stderr, EC_COLOR_CYAN"\n Core dumping... (use the 'core' file for gdb analysis)\n\n"EC_COLOR_END);
+#ifdef HAVE_EC_LUA
+   fprintf (stderr, EC_COLOR_CYAN" Lua stack trace: \n"EC_COLOR_END);
+   // Let's try to print the lua stack trace, maybe.
+   ec_lua_print_stack(stderr);
+   fprintf (stderr, "\n");
+#endif
+   fprintf (stderr, EC_COLOR_YELLOW" Have a nice day!\n"EC_COLOR_END);
    
    /* force the coredump */
 #ifndef OS_WINDOWS
@@ -175,8 +184,10 @@ static RETSIGTYPE signal_SEGV(int sig)
 #endif
       fprintf (stderr, EC_COLOR_RED"Segmentation Fault...\n\n"EC_COLOR_END);
    fprintf(stderr, "Please recompile in debug mode, reproduce the bug and send a bugreport\n\n");
+   fprintf (stderr, EC_COLOR_YELLOW" Have a nice day!\n"EC_COLOR_END);
+
    
-   _exit(666);
+   clean_exit(666);
 #endif
 }
 
@@ -185,7 +196,7 @@ static RETSIGTYPE signal_SEGV(int sig)
 /*
  * received on CTRL+C or SIGTERM
  */
-static RETSIGTYPE signal_TERM(int sig)
+static void signal_TERM(int sig)
 {
    #ifdef HAVE_STRSIGNAL
       DEBUG_MSG("Signal handler... (caught SIGNAL: %d) | %s", sig, strsignal(sig));
@@ -208,21 +219,18 @@ static RETSIGTYPE signal_TERM(int sig)
    
    signal(sig, SIG_IGN);
 
-   /* stop the mitm process (if activated) */
-   mitm_stop();
+   /* flush and close the log file */
+   log_stop();
 
-   /* kill all the threads */
-   ec_thread_kill_all();
-  
-   /* exit discarding the atexit functions, ha are in a signal handler! */
-   _exit(0);
+	/* make sure we exit gracefully */
+   clean_exit(0);
 }
 
 
 /*
  * received when a child exits
  */
-static RETSIGTYPE signal_CHLD(int sig)
+static void signal_CHLD(int sig)
 {
 #ifndef OS_WINDOWS
    int stat;

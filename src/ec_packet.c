@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_packet.c,v 1.31 2004/04/07 09:51:15 lordnaga Exp $
 */
 
 #include <ec.h>
@@ -28,18 +27,30 @@
 
 /* protos... */
 
-inline int packet_create_object(struct packet_object *po, u_char *buf, size_t len);
+struct packet_object* packet_allocate_object(u_char *data, bpf_u_int32 len);
+inline int packet_create_object(struct packet_object *po, u_char *buf, bpf_u_int32 len);
 inline int packet_destroy_object(struct packet_object *po);
-int packet_disp_data(struct packet_object *po, u_char *buf, size_t len);
+int packet_disp_data(struct packet_object *po, u_char *buf, bpf_u_int32 len);
 struct packet_object * packet_dup(struct packet_object *po, u_char flag);
 
 /* --------------------------- */
+
+struct packet_object* packet_allocate_object(u_char *data, bpf_u_int32 len)
+{
+   struct packet_object *po;
+
+   SAFE_CALLOC(po, 1, sizeof(struct packet_object));
+   packet_create_object(po, data, len);
+   po->flags |= PO_FORGED;
+   
+   return po;
+}
 
 /*
  * associate the buffer to the packet object
  */
 
-inline int packet_create_object(struct packet_object *po, u_char *buf, size_t len)
+inline int packet_create_object(struct packet_object *po, u_char *buf, bpf_u_int32 len)
 {
    /* clear the memory */
    memset(po, 0, sizeof(struct packet_object));
@@ -54,19 +65,22 @@ inline int packet_create_object(struct packet_object *po, u_char *buf, size_t le
 /*
  * allocate the buffer for disp data
  *
- * disp data is usefull when the protocol is
+ * disp data is useful when the protocol is
  * encrypted and we want to forward the packet as is
  * but display the decrypted data.
  * decoders should decrypt data from po->DATA.data to po->DATA.disp_data
  */
 
-int packet_disp_data(struct packet_object *po, u_char *buf, size_t len)
+int packet_disp_data(struct packet_object *po, u_char *buf, bpf_u_int32 len)
 {
    /* disp_data is always null terminated */
-   if (len + 1)
+   if (len + 1) {
+      if(po->DATA.disp_data)
+        SAFE_FREE(po->DATA.disp_data);
       SAFE_CALLOC(po->DATA.disp_data, len + 1, sizeof(u_char));
-   else
+   } else {
       ERROR_MSG("packet_disp_data() negative len");
+   }
 
    po->DATA.disp_len = len;
    memcpy(po->DATA.disp_data, buf, len);
@@ -78,7 +92,7 @@ int packet_disp_data(struct packet_object *po, u_char *buf, size_t len)
  * free the packet object memory
  */
 
-inline int packet_destroy_object(struct packet_object *po)
+int packet_destroy_object(struct packet_object *po)
 {
    
    /* 
@@ -98,8 +112,10 @@ inline int packet_destroy_object(struct packet_object *po)
        */
       SAFE_FREE(po->DISSECTOR.user);
       SAFE_FREE(po->DISSECTOR.pass);
+      SAFE_FREE(po->DISSECTOR.content);
       SAFE_FREE(po->DISSECTOR.info);
       SAFE_FREE(po->DISSECTOR.banner);
+      SAFE_FREE(po->DISSECTOR.os);
    }
       
    /* 
@@ -111,6 +127,12 @@ inline int packet_destroy_object(struct packet_object *po)
     * free them.
     */
    SAFE_FREE(po->DATA.disp_data);
+
+   /* if it is alloced entirely by ourselves */
+   if(po->flags & PO_FORGED) {
+      SAFE_FREE(po->packet);
+      SAFE_FREE(po);
+   }
    
    return 0;
 }
@@ -167,6 +189,7 @@ struct packet_object * packet_dup(struct packet_object *po, u_char flag)
       dup_po->DISSECTOR.pass = NULL;
       dup_po->DISSECTOR.info = NULL;
       dup_po->DISSECTOR.banner = NULL;
+      dup_po->DISSECTOR.os = NULL;
    }
    
    /* 

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_sniff.c,v 1.54 2004/06/25 14:24:29 alor Exp $
 */
 
 #include <ec.h>
@@ -47,6 +46,10 @@ static void add_port(void *ports, u_int n);
 static void add_ip(void *digit, u_int n);
 static int expand_range_ip(char *str, void *target);
 
+#ifdef WITH_IPV6
+static int expand_ipv6(char *str, struct target_env *target);
+#endif
+
 void del_ip_list(struct ip_addr *ip, struct target_env *t);
 int cmp_ip_list(struct ip_addr *ip, struct target_env *t);
 void add_ip_list(struct ip_addr *ip, struct target_env *t);
@@ -55,6 +58,12 @@ void free_ip_list(struct target_env *t);
 static pthread_mutex_t ip_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 #define IP_LIST_LOCK     do{ pthread_mutex_lock(&ip_list_mutex); } while(0)
 #define IP_LIST_UNLOCK   do{ pthread_mutex_unlock(&ip_list_mutex); } while(0)
+
+#ifdef WITH_IPV6
+static pthread_mutex_t ip6_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+#define IP6_LIST_LOCK    do{ pthread_mutex_lock(&ip6_list_mutex); } while(0)
+#define IP6_LIST_UNLOCK  do{ pthread_mutex_unlock(&ip6_list_mutex); } while(0)
+#endif
 
 /*******************************************/
 
@@ -165,7 +174,7 @@ static void set_interesting_flag(struct packet_object *po)
    /* T1.mac == src & T1.ip = src & T1.port = src */
    if ( (GBL_TARGET1->all_mac  || !memcmp(GBL_TARGET1->mac, po->L2.src, MEDIA_ADDR_LEN)) &&
         (GBL_TARGET1->all_ip   || cmp_ip_list(&po->L3.src, GBL_TARGET1) || 
-            (GBL_OPTIONS->remote && ip_addr_is_local(&po->L3.src) != ESUCCESS) ) &&
+            (GBL_OPTIONS->remote && ip_addr_is_local(&po->L3.src, NULL) != ESUCCESS) ) &&
         (GBL_TARGET1->all_port || BIT_TEST(GBL_TARGET1->ports, ntohs(po->L4.src))) )
       value = 1;
 
@@ -173,13 +182,14 @@ static void set_interesting_flag(struct packet_object *po)
    if ( value && (
         (GBL_TARGET2->all_mac || !memcmp(GBL_TARGET2->mac, po->L2.dst, MEDIA_ADDR_LEN) || !memcmp(GBL_IFACE->mac, po->L2.dst, MEDIA_ADDR_LEN)) &&
         (GBL_TARGET2->all_ip || cmp_ip_list(&po->L3.dst, GBL_TARGET2) || 
-            (GBL_OPTIONS->remote && ip_addr_is_local(&po->L3.dst) != ESUCCESS) ) &&
+            (GBL_OPTIONS->broadcast && ip_addr_is_broadcast(&po->L3.dst, &GBL_IFACE->ip) == ESUCCESS) ||
+            (GBL_OPTIONS->remote && ip_addr_is_local(&po->L3.dst, NULL) != ESUCCESS) ) &&
         (GBL_TARGET2->all_port || BIT_TEST(GBL_TARGET2->ports, ntohs(po->L4.dst))) ) )
       good = 1;   
   
    /* 
     * reverse the matching but only if it has matched !
-    * if good && proto is valse, we have to go on with
+    * if good && proto is false, we have to go on with
     * tests and evaluate it later
     */
    if ((good && proto) && GBL_OPTIONS->reversed ^ (good && proto) ) {
@@ -189,12 +199,14 @@ static void set_interesting_flag(struct packet_object *po)
    
    value = 0;
    
-   /* FROM TARGET12 TO TARGET1 */
+   /* FROM TARGET2 TO TARGET1 */
    
    /* T1.mac == dst & T1.ip = dst & T1.port = dst */
+   /* if broadcast then T2 -> broadcast */
    if ( (GBL_TARGET1->all_mac  || !memcmp(GBL_TARGET1->mac, po->L2.dst, MEDIA_ADDR_LEN) || !memcmp(GBL_IFACE->mac, po->L2.dst, MEDIA_ADDR_LEN)) &&
         (GBL_TARGET1->all_ip   || cmp_ip_list(&po->L3.dst, GBL_TARGET1) || 
-            (GBL_OPTIONS->remote && ip_addr_is_local(&po->L3.dst) != ESUCCESS) ) &&
+            (GBL_OPTIONS->broadcast && ip_addr_is_broadcast(&po->L3.dst, &GBL_IFACE->ip) == ESUCCESS) ||
+            (GBL_OPTIONS->remote && ip_addr_is_local(&po->L3.dst, NULL) != ESUCCESS) ) &&
         (GBL_TARGET1->all_port || BIT_TEST(GBL_TARGET1->ports, ntohs(po->L4.dst))) )
       value = 1;
 
@@ -202,10 +214,11 @@ static void set_interesting_flag(struct packet_object *po)
    if ( value && (
         (GBL_TARGET2->all_mac || !memcmp(GBL_TARGET2->mac, po->L2.src, MEDIA_ADDR_LEN)) &&
         (GBL_TARGET2->all_ip || cmp_ip_list(&po->L3.src, GBL_TARGET2) || 
-            (GBL_OPTIONS->remote && ip_addr_is_local(&po->L3.src) != ESUCCESS) ) &&
+            (GBL_OPTIONS->remote && ip_addr_is_local(&po->L3.src, NULL) != ESUCCESS) ) &&
         (GBL_TARGET2->all_port || BIT_TEST(GBL_TARGET2->ports, ntohs(po->L4.src))) ) )
       good = 1;   
-   
+  
+
    /* reverse the matching */ 
    if (GBL_OPTIONS->reversed ^ (good && proto) ) {
       po->flags &= ~PO_IGNORE;
@@ -228,6 +241,7 @@ void reset_display_filter(struct target_env *t)
    memset(t->mac, 0, sizeof(t->mac));
    t->all_mac = 1;
    t->all_ip = 1;
+   t->all_ip6 = 1;
    t->all_port = 1;
    t->scan_all = 0;
 }
@@ -239,18 +253,32 @@ void reset_display_filter(struct target_env *t)
 int compile_display_filter(void)
 {
    char *t1, *t2;
+  
+#ifdef WITH_IPV6 
+   /* if not specified default to /// */
+   if (!GBL_OPTIONS->target1)
+      GBL_OPTIONS->target1 = strdup("///");
+   /* if /// was specified, select all */
+   else if (!strncmp(GBL_OPTIONS->target1, "///", 3))
+      GBL_TARGET1->scan_all = 1;
    
+   if (!GBL_OPTIONS->target2)
+      GBL_OPTIONS->target2 = strdup("///");
+   else if (!strncmp(GBL_OPTIONS->target2, "///", 3))
+      GBL_TARGET2->scan_all = 1;
+#else
    /* if not specified default to // */
    if (!GBL_OPTIONS->target1)
       GBL_OPTIONS->target1 = strdup("//");
    /* if // was specified, select all */
-   else if (!strncmp(GBL_OPTIONS->target1, "//", 2))
+   else if (!strncmp(GBL_OPTIONS->target1, "//", 2) && strlen(GBL_OPTIONS->target1) == 2)
       GBL_TARGET1->scan_all = 1;
-   
+  
    if (!GBL_OPTIONS->target2)
       GBL_OPTIONS->target2 = strdup("//");
-   else if (!strncmp(GBL_OPTIONS->target2, "//", 2))
+   else if (!strncmp(GBL_OPTIONS->target2, "//", 2) && strlen(GBL_OPTIONS->target2) == 2)
       GBL_TARGET2->scan_all = 1;
+#endif
 
    /* make a copy to operate on */
    t1 = strdup(GBL_OPTIONS->target1);
@@ -275,7 +303,19 @@ int compile_display_filter(void)
  */
 int compile_target(char *string, struct target_env *target)
 {
+
+#define MAC_TOK 0
+#define IP_TOK 1
+
+#ifdef WITH_IPV6
+#define IPV6_TOK 2
+#define PORT_TOK 3
+#define MAX_TOK 4
+#else
+#define PORT_TOK 2
 #define MAX_TOK 3
+#endif
+
    char valid[] = "1234567890/.,-;:ABCDEFabcdef";
    char *tok[MAX_TOK];
    char *p;
@@ -286,6 +326,7 @@ int compile_target(char *string, struct target_env *target)
    /* reset the special marker */
    target->all_mac = 0;
    target->all_ip = 0;
+   target->all_ip6 = 0;
    target->all_port = 0;
    
    /* check for invalid char */
@@ -296,40 +337,55 @@ int compile_target(char *string, struct target_env *target)
    for (p = strsep(&string, "/"); p != NULL; p = strsep(&string, "/")) {
       tok[i++] = strdup(p);
       /* bad parsing */
-      if (i > MAX_TOK) break;
+      if (i > (MAX_TOK - 1)) break;
    }
   
    if (i != MAX_TOK)
+#ifdef WITH_IPV6
+      SEMIFATAL_ERROR("Incorrect number of token (///) in TARGET !!");
+#else
       SEMIFATAL_ERROR("Incorrect number of token (//) in TARGET !!");
+#endif
    
-   DEBUG_MSG("MAC  : [%s]", tok[0]);
-   DEBUG_MSG("IP   : [%s]", tok[1]);
-   DEBUG_MSG("PORT : [%s]", tok[2]);
+   DEBUG_MSG("MAC  : [%s]", tok[MAC_TOK]);
+   DEBUG_MSG("IP   : [%s]", tok[IP_TOK]);
+#ifdef WITH_IPV6
+   DEBUG_MSG("IPv6 : [%s]", tok[IPV6_TOK]);
+#endif
+   DEBUG_MSG("PORT : [%s]", tok[PORT_TOK]);
   
    /* set the mac address */
-   if (!strcmp(tok[0], ""))
+   if (!strcmp(tok[MAC_TOK], ""))
       target->all_mac = 1;
-   else if (mac_addr_aton(tok[0], target->mac) == 0)
-      SEMIFATAL_ERROR("Incorrect TARGET MAC parsing... (%s)", tok[0]);
+   else if (mac_addr_aton(tok[MAC_TOK], target->mac) == 0)
+      SEMIFATAL_ERROR("Incorrect TARGET MAC parsing... (%s)", tok[MAC_TOK]);
 
    /* parse the IP range */
-   if (!strcmp(tok[1], ""))
+   if (!strcmp(tok[IP_TOK], ""))
       target->all_ip = 1;
    else
-     for(p = strsep(&tok[1], ";"); p != NULL; p = strsep(&tok[1], ";"))
+     for(p = strsep(&tok[IP_TOK], ";"); p != NULL; p = strsep(&tok[IP_TOK], ";"))
         expand_range_ip(p, target);
-   
+  
+#ifdef WITH_IPV6 
+   if(!strcmp(tok[IPV6_TOK], ""))
+      target->all_ip6 = 1;
+   else
+      for(p = strsep(&tok[IPV6_TOK], ";"); p != NULL; p = strsep(&tok[IPV6_TOK], ";"))
+         expand_ipv6(p, target);
+#endif 
+
    /* 
     * expand the range into the port bitmap array
     * 1<<16 is MAX_PORTS 
     */
-   if (!strcmp(tok[2], ""))
+   if (!strcmp(tok[PORT_TOK], ""))
       target->all_port = 1;
    else {
-      if (expand_token(tok[2], 1<<16, &add_port, target->ports) == -EFATAL)
+      if (expand_token(tok[PORT_TOK], 1<<16, &add_port, target->ports) == -EFATAL)
          SEMIFATAL_ERROR("Invalid port range");
    }
-   
+
    for(i = 0; i < MAX_TOK; i++)
       SAFE_FREE(tok[i]);
 
@@ -386,11 +442,11 @@ static int expand_range_ip(char *str, void *target)
    p = str;
 
    /* tokenize the ip into 4 slices */
-   while ( (q = ec_strtok(p, ".", &tok)) ) {
+   while ((q = ec_strtok(p, ".", &tok)) ) {
       addr[i++] = strdup(q);
       /* reset p for the next strtok */
       if (p != NULL) p = NULL;
-      if (i > 4) break;
+      if (i > 3) break;
    }
 
    if (i != 4)
@@ -411,7 +467,7 @@ static int expand_range_ip(char *str, void *target)
    /* give the impulses to the last digit */
    for (i = 0; i < permut; i++) {
 
-      sprintf(parsed_ip, "%d.%d.%d.%d",  ADDR[0].values[ADDR[0].cur],
+      snprintf(parsed_ip, 16, "%d.%d.%d.%d",  ADDR[0].values[ADDR[0].cur],
                                          ADDR[1].values[ADDR[1].cur],
                                          ADDR[2].values[ADDR[2].cur],
                                          ADDR[3].values[ADDR[3].cur]);
@@ -419,7 +475,7 @@ static int expand_range_ip(char *str, void *target)
       if (inet_aton(parsed_ip, &ipaddr) == 0)
          FATAL_ERROR("Invalid IP address (%s)", parsed_ip);
 
-      ip_addr_init(&tmp, AF_INET,(char *)&ipaddr );
+      ip_addr_init(&tmp, AF_INET,(u_char *)&ipaddr );
       add_ip_list(&tmp, target);
       
       /* give the impulse to the last octet */ 
@@ -439,6 +495,20 @@ static int expand_range_ip(char *str, void *target)
      
    return ESUCCESS;
 }
+
+#ifdef WITH_IPV6
+/* Adds IPv6 address to the target list */
+static int expand_ipv6(char *str, struct target_env *target)
+{
+   struct ip_addr ip;
+   
+   if(ip_addr_pton(str, &ip) != ESUCCESS)
+      SEMIFATAL_ERROR("Invalid IPv6 address");
+
+   add_ip_list(&ip, target);
+   return ESUCCESS;
+}
+#endif
 
 /* fill the digit structure with data */
 static void add_ip(void *digit, u_int n)
@@ -463,35 +533,58 @@ void add_ip_list(struct ip_addr *ip, struct target_env *t)
    
    memcpy(&e->ip, ip, sizeof(struct ip_addr));
 
-   IP_LIST_LOCK;
-   
-   /* insert it at the beginning of the list */
-   //SLIST_INSERT_HEAD (&t->ips, e, next); 
-
-   /* 
-    * insert it at the end of the list.
-    * search the last element then insert the new one
-    */
-   LIST_FOREACH (last, &t->ips, next) {
-      /* if already in the list, skip it */
-      if (!ip_addr_cmp(&last->ip, ip)) {
-         IP_LIST_UNLOCK;
-         return;
-      }
+   switch(ntohs(ip->addr_type)) {
+      case AF_INET:
+         IP_LIST_LOCK;
+         /* 
+          * insert it at the end of the list.
+          * search the last element then insert the new one
+          */
+         LIST_FOREACH (last, &t->ips, next) {
+            /* if already in the list, skip it */
+            if (!ip_addr_cmp(&last->ip, ip)) {
+               IP_LIST_UNLOCK;
+               return;
+            }
       
-      if (LIST_NEXT(last, next) == LIST_END(&t->ips))
-         break;
-   }
+            if (LIST_NEXT(last, next) == LIST_END(&t->ips))
+               break;
+         }
 
-   if (last)
-      LIST_INSERT_AFTER(last, e, next);
-   else 
-      LIST_INSERT_HEAD(&t->ips, e, next);
+         if (last)
+            LIST_INSERT_AFTER(last, e, next);
+         else 
+            LIST_INSERT_HEAD(&t->ips, e, next);
    
-   /* the target has at least one ip, so remove the "all" flag */
-   t->all_ip = 0;
+         /* the target has at least one ip, so remove the "all" flag */
+         t->all_ip = 0;
+         t->scan_all = 0;
    
-   IP_LIST_UNLOCK;
+         IP_LIST_UNLOCK;
+         break;
+#ifdef WITH_IPV6
+      case AF_INET6:
+         IP6_LIST_LOCK;
+         LIST_FOREACH(last, &t->ip6, next) {
+            if(!ip_addr_cmp(&last->ip, ip)) {
+               IP6_LIST_UNLOCK;
+               return;
+            }
+            if(LIST_NEXT(last, next) == LIST_END(&t->ip6))
+               break;
+         }
+
+         if(last)
+            LIST_INSERT_AFTER(last, e, next);
+         else
+            LIST_INSERT_HEAD(&t->ip6, e, next);
+
+         t->all_ip6 = 0;
+         t->scan_all = 0;
+         IP6_LIST_UNLOCK;
+         break;
+#endif
+   }
    
    return;
 }
@@ -503,16 +596,34 @@ void add_ip_list(struct ip_addr *ip, struct target_env *t)
 int cmp_ip_list(struct ip_addr *ip, struct target_env *t)
 {
    struct ip_list *e;
-
-   IP_LIST_LOCK;
    
-   LIST_FOREACH (e, &t->ips, next)
-      if (!ip_addr_cmp(&(e->ip), ip)) {
-         IP_LIST_UNLOCK;
-         return 1;
-      }
+   switch(ntohs(ip->addr_type)) {
+      case AF_INET:
+         IP_LIST_LOCK;
+   
+         LIST_FOREACH (e, &t->ips, next)
+            if (!ip_addr_cmp(&(e->ip), ip)) {
+               IP_LIST_UNLOCK;
+               return 1;
+            }
 
-   IP_LIST_UNLOCK;
+         IP_LIST_UNLOCK;
+         break;
+     
+#ifdef WITH_IPV6 
+      case AF_INET6:
+         IP6_LIST_LOCK;
+
+         LIST_FOREACH(e, &t->ip6, next)
+            if(!ip_addr_cmp(&e->ip, ip)) {
+               IP6_LIST_UNLOCK;
+               return 1;
+            }
+
+         IP6_LIST_UNLOCK;
+         break;
+#endif
+   }
    
    return 0;
 }
@@ -525,24 +636,49 @@ void del_ip_list(struct ip_addr *ip, struct target_env *t)
 {
    struct ip_list *e;
 
-   IP_LIST_LOCK;
+   switch(ntohs(ip->addr_type)) {
+      case AF_INET:
+         IP_LIST_LOCK;
    
-   LIST_FOREACH (e, &t->ips, next) {
-      if (!ip_addr_cmp(&(e->ip), ip)) {
-         LIST_REMOVE(e, next);
-         SAFE_FREE(e);
-         /* check if the list is empty */
-         if (LIST_FIRST(&t->ips) == LIST_END(&t->ips)) {
-            /* the list is empty, set the "all" flag */
-            t->all_ip = 1;
-         }
+         LIST_FOREACH (e, &t->ips, next) {
+            if (!ip_addr_cmp(&(e->ip), ip)) {
+               LIST_REMOVE(e, next);
+               SAFE_FREE(e);
+               /* check if the list is empty */
+               if (LIST_FIRST(&t->ips) == LIST_END(&t->ips)) {
+                  /* the list is empty, set the "all" flag */
+                  t->all_ip = 1;
+               }
          
-         IP_LIST_UNLOCK;
-         return;
-      }
-   }
+               IP_LIST_UNLOCK;
+               return;
+            }
+         }
    
-   IP_LIST_UNLOCK;
+         IP_LIST_UNLOCK;
+         break;
+
+#ifdef WITH_IPV6
+      case AF_INET6:
+         IP6_LIST_LOCK;
+
+         LIST_FOREACH(e, &t->ip6, next) {
+            if(!ip_addr_cmp(&e->ip, ip)) {
+               LIST_REMOVE(e, next);
+               SAFE_FREE(e);
+
+               if(LIST_FIRST(&t->ip6) == LIST_END(&t->ip6))
+                  t->all_ip6 = 1;
+               
+               IP6_LIST_UNLOCK;
+               return;
+            }
+         }
+
+         IP6_LIST_UNLOCK;
+         break;
+#endif
+   }
    
    return;
 }
@@ -564,6 +700,17 @@ void free_ip_list(struct target_env *t)
    }  
    
    IP_LIST_UNLOCK;
+
+#ifdef WITH_IPV6
+   IP6_LIST_LOCK;
+   
+   LIST_FOREACH_SAFE(e, &t->ip6, next, tmp) {
+      LIST_REMOVE(e, next);
+      SAFE_FREE(e);
+   }
+
+   IP6_LIST_UNLOCK;
+#endif
 }
 
 

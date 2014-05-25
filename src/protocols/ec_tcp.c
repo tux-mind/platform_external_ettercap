@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_tcp.c,v 1.42 2004/09/28 09:56:13 alor Exp $
 */
 
 #include <ec.h>
@@ -65,7 +64,7 @@ struct tcp_header {
 
 
 /* Session identifier 
- * It has to be even-lenghted for session hash matching */
+ * It has to be even-lengthed for session hash matching */
 struct tcp_ident {
    u_int32 magic;
       #define TCP_MAGIC  0x0400e77e
@@ -116,7 +115,7 @@ FUNC_DECODER(decode_tcp)
    tcp = (struct tcp_header *)DECODE_DATA;
    
    opt_start = (u_char *)(tcp + 1);
-   opt_end = (u_char *)((int)tcp + tcp->off * 4);
+   opt_end = (u_char*)tcp + tcp->off * 4;
 
    DECODED_LEN = (u_int32)(tcp->off * 4);
 
@@ -163,7 +162,7 @@ FUNC_DECODER(decode_tcp)
    if (GBL_CONF->checksum_check) {
       if (!GBL_OPTIONS->unoffensive && (sum = L4_checksum(PACKET)) != CSUM_RESULT) {
          char tmp[MAX_ASCII_ADDR_LEN];
-#if defined(OS_DARWIN) || defined (OS_WINDOWS)
+#if defined(OS_DARWIN) || defined (OS_WINDOWS) || defined(OS_LINUX)
          /* 
           * XXX - hugly hack here !  Mac OS X really sux
           * 
@@ -178,9 +177,11 @@ FUNC_DECODER(decode_tcp)
           * For Windows at least, TCP checksum off-loading can be disabled with a
           * registry setting.
           *
+          * Same for Linux, but sometimes even ethtool doesnt turn this feature off.
+          *
           * if the source is the ettercap host, don't display the message 
           */
-         if (!ip_addr_cmp(&PACKET->L3.src, &GBL_IFACE->ip))
+         if (ip_addr_is_ours(&PACKET->L3.src) == EFOUND)
             return NULL;
 #endif
          if (GBL_CONF->checksum_warning)
@@ -229,7 +230,8 @@ FUNC_DECODER(decode_tcp)
             case TCPOPT_TIMESTAMP:
                fingerprint_push(PACKET->PASSIVE.fingerprint, FINGER_TIMESTAMP, 1);
                opt_start++;
-               opt_start += (*opt_start - 1);
+               if ((*opt_start) > 0)
+                   opt_start += ((*opt_start) - 1);
                break;
             default:
                opt_start++;
@@ -248,7 +250,8 @@ FUNC_DECODER(decode_tcp)
    hook_point(HOOK_PACKET_TCP, po);
 
    /* don't save the sessions in unoffensive mode */
-   if (!GBL_OPTIONS->unoffensive && !GBL_OPTIONS->read) {
+   /* don't save sessions if no filters chain are defined */
+   if (GBL_FILTERS && !GBL_OPTIONS->unoffensive && !GBL_OPTIONS->read) {
       
       /* Find or create the correct session */
       tcp_create_ident(&ident, PACKET);
@@ -288,11 +291,11 @@ FUNC_DECODER(decode_tcp)
    } 
    
    /* get the next decoder */
-   next_decoder =  get_decoder(APP_LAYER, PL_DEFAULT);
+   next_decoder = get_decoder(APP_LAYER, PL_DEFAULT);
    EXECUTE_DECODER(next_decoder);
 
    /* don't save the sessions in unoffensive mode */
-   if (!GBL_OPTIONS->unoffensive && !GBL_OPTIONS->read) {
+   if (GBL_FILTERS && !GBL_OPTIONS->unoffensive && !GBL_OPTIONS->read) {
       
       /* 
        * Take trace of the FIN flag (to block injection) 
@@ -412,7 +415,8 @@ FUNC_INJECTOR(inject_tcp)
    PACKET->L4.len = sizeof(struct tcp_header);
    PACKET->DATA.len = LENGTH; 
    tcph->csum = L4_checksum(PACKET);
-    
+  
+   session_del(s->ident, TCP_IDENT_LEN); 
    return ESUCCESS;
 }
 
@@ -445,7 +449,7 @@ size_t tcp_create_ident(void **i, struct packet_object *po)
    /* return the ident */
    *i = ident;
 
-   /* return the lenght of the ident */
+   /* return the length of the ident */
    return sizeof(struct tcp_ident);
 }
 

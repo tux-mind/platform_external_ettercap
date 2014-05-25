@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_udp.c,v 1.21 2004/09/28 09:56:13 alor Exp $
 */
 
 #include <ec.h>
@@ -77,7 +76,9 @@ FUNC_DECODER(decode_udp)
 
    /* set up the data poiters */
    PACKET->DATA.data = ((u_char *)udp) + sizeof(struct udp_header);
-   if (ntohs(udp->ulen) < (u_int16)sizeof(struct udp_header))
+   /* check for bogus len */
+   if (ntohs(udp->ulen) < (u_int16)sizeof(struct udp_header) || 
+       ntohs(udp->ulen) > PACKET->L3.payload_len)
       return NULL;
    PACKET->DATA.len = ntohs(udp->ulen) - (u_int16)sizeof(struct udp_header);
   
@@ -93,7 +94,7 @@ FUNC_DECODER(decode_udp)
    if (GBL_CONF->checksum_check) {
       if (!GBL_OPTIONS->unoffensive && (sum = L4_checksum(PACKET)) != CSUM_RESULT) {
          char tmp[MAX_ASCII_ADDR_LEN];
-#if defined(OS_DARWIN) || defined(OS_WINDOWS)
+#if defined(OS_DARWIN) || defined(OS_WINDOWS) || defined(OS_LINUX)
          /* 
           * XXX - hugly hack here !  Mac OS X really sux
           * 
@@ -110,7 +111,7 @@ FUNC_DECODER(decode_udp)
           *
           * if the source is the ettercap host, don't display the message 
           */
-         if (!ip_addr_cmp(&PACKET->L3.src, &GBL_IFACE->ip))
+         if (!ip_addr_is_ours(&PACKET->L3.src) == EFOUND)
             return NULL;
 #endif
          if (GBL_CONF->checksum_warning)

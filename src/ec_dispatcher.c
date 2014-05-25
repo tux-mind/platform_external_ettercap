@@ -17,13 +17,13 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_dispatcher.c,v 1.36 2004/07/23 07:25:27 alor Exp $
 */
 
 #include <ec.h>
 #include <ec_threads.h>
 #include <ec_hook.h>
 #include <ec_stats.h>
+#include <time.h>
 
 
 /* this is the PO queue from bottom to top half */
@@ -60,7 +60,13 @@ EC_THREAD_FUNC(top_half)
 {
    struct po_queue_entry *e;
    u_int pck_len;
-   
+ 
+#if !defined(OS_WINDOWS) 
+   struct timespec tm;   
+   tm.tv_sec = 0;
+   tm.tv_nsec = 1000; 
+#endif
+
    /* initialize the thread */
    ec_thread_init();
    
@@ -91,8 +97,11 @@ EC_THREAD_FUNC(top_half)
       /* the queue is empty, nothing to do... */
       if (e == NULL) {
          PO_QUEUE_UNLOCK;
-         
-         usleep(1000);
+#if !defined(OS_WINDOWS)         
+         nanosleep(&tm, NULL);
+#else
+         usleep(100);
+#endif
          continue;
       }
   

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_gtk_menus.c,v 1.13 2004/12/21 11:24:02 alor Exp $
 */
 
 #include <ec.h>
@@ -63,7 +62,7 @@ GtkItemFactoryEntry gmenu_view[] = {
    {"/View/_Visualization method...", "v", gtkui_vis_method,       0, "<StockItem>", GTK_STOCK_PREFERENCES },
    {"/View/Visualization _regex...",  "R", gtkui_vis_regex,        0, "<StockItem>", GTK_STOCK_FIND },
    {"/View/sep1",                    NULL, NULL,                   0, "<Separator>" },
-   {"/View/Set the _WEP key...",      "w", gtkui_wep_key,          0, "<StockItem>", GTK_STOCK_FIND }
+   {"/View/Set the _WiFi key...",      "w", gtkui_wifi_key,          0, "<StockItem>", GTK_STOCK_FIND }
 };
 
 GtkItemFactoryEntry gmenu_mitm[] = {
@@ -102,8 +101,8 @@ GtkItemFactoryEntry gmenu_plugins[] = {
 
 #ifndef OS_WINDOWS
 GtkItemFactoryEntry gmenu_help[] = {
-   {"/_Help",                   NULL,         NULL,              0, "<Branch>" },
-   {"/Help/Contents", " ", gtkui_help, 0, "<StockItem>", GTK_STOCK_HELP }
+   {"/_?",                   NULL,         NULL,              0, "<Branch>" },
+   {"/?/Contents", " ", gtkui_help, 0, "<StockItem>", GTK_STOCK_HELP }
 };
 #endif
 

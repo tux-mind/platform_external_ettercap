@@ -17,12 +17,14 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_hook.c,v 1.10 2004/05/20 10:06:21 alor Exp $
 */
 
 #include <ec.h>
 #include <ec_hook.h>
 #include <ec_packet.h>
+#ifdef HAVE_EC_LUA
+  #include <ec_lua.h>
+#endif
 
 #include <pthread.h>
 
@@ -82,6 +84,9 @@ void hook_point(int point, struct packet_object *po)
    
       HOOK_UNLOCK;
    }
+#ifdef HAVE_EC_LUA
+   ec_lua_dispatch_hooked_packet(point, po);
+#endif
    
    return;
 }

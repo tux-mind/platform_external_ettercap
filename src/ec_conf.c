@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_conf.c,v 1.39 2004/09/28 09:56:12 alor Exp $
 */
 
 #include <ec.h>
@@ -48,6 +47,9 @@ static struct conf_entry mitm[] = {
    { "dhcp_lease_time", NULL },
    { "port_steal_delay", NULL },
    { "port_steal_send_delay", NULL },
+#ifdef WITH_IPV6
+   { "nadv_poison_send_delay", NULL },
+#endif
    { NULL, NULL },
 };
 
@@ -71,6 +73,7 @@ static struct conf_entry misc[] = {
    { "skip_forwarded_pcks", NULL },
    { "checksum_warning", NULL },
    { "checksum_check", NULL },
+   { "submit_fingerprint", NULL },
    { NULL, NULL },
 };
 
@@ -105,6 +108,7 @@ static struct conf_entry strings[] = {
 /* this is fake, dissector use a different registration */
 static struct conf_entry dissectors[] = {
    { "fake", &number_of_dissectors },
+   { NULL, NULL },
 };
 
 static struct conf_section sections[] = {
@@ -156,6 +160,9 @@ static void init_structures(void)
    set_pointer((struct conf_entry *)&mitm, "dhcp_lease_time", &GBL_CONF->dhcp_lease_time);
    set_pointer((struct conf_entry *)&mitm, "port_steal_delay", &GBL_CONF->port_steal_delay);
    set_pointer((struct conf_entry *)&mitm, "port_steal_send_delay", &GBL_CONF->port_steal_send_delay);
+#ifdef WITH_IPV6
+   set_pointer((struct conf_entry *)&mitm, "nadv_poison_send_delay", &GBL_CONF->nadv_poison_send_delay);
+#endif
    set_pointer((struct conf_entry *)&connections, "connection_timeout", &GBL_CONF->connection_timeout);
    set_pointer((struct conf_entry *)&connections, "connection_idle", &GBL_CONF->connection_idle);
    set_pointer((struct conf_entry *)&connections, "connection_buffer", &GBL_CONF->connection_buffer);
@@ -167,6 +174,7 @@ static void init_structures(void)
    set_pointer((struct conf_entry *)&misc, "skip_forwarded_pcks", &GBL_CONF->skip_forwarded);
    set_pointer((struct conf_entry *)&misc, "checksum_warning", &GBL_CONF->checksum_warning);
    set_pointer((struct conf_entry *)&misc, "checksum_check", &GBL_CONF->checksum_check);
+   set_pointer((struct conf_entry *)&misc, "submit_fingerprint", &GBL_CONF->submit_fingerprint);
    set_pointer((struct conf_entry *)&curses, "color_bg", &GBL_CONF->colors.bg);
    set_pointer((struct conf_entry *)&curses, "color_fg", &GBL_CONF->colors.fg);
    set_pointer((struct conf_entry *)&curses, "color_join1", &GBL_CONF->colors.join1);

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: ec_arp.c,v 1.12 2003/10/27 21:25:45 alor Exp $
 */
 
 #include <ec.h>
@@ -91,8 +90,8 @@ FUNC_DECODER(decode_arp)
       struct arp_eth_header *earp;
       earp = (struct arp_eth_header *)(arp + 1);
       
-      ip_addr_init(&PACKET->L3.src, AF_INET, (char *)&earp->arp_spa);
-      ip_addr_init(&PACKET->L3.dst, AF_INET, (char *)&earp->arp_tpa);
+      ip_addr_init(&PACKET->L3.src, AF_INET, (u_char *)&earp->arp_spa);
+      ip_addr_init(&PACKET->L3.dst, AF_INET, (u_char *)&earp->arp_tpa);
            
 
       /* 
