@@ -36,13 +36,7 @@
 
 #define	__BIND		19950621	/* (DEAD) interface version stamp. */
 
-/* #include <endian.h> */
-
-#define LITTLE_ENDIAN 1234	// added by ALoR
-#define BIG_ENDIAN    4321
-#define PDP_ENDIAN    3412
-
-#define BYTE_ORDER LITTLE_ENDIAN
+#include <endian.h>
 
 /*
  * Structure for query header.  The order of the fields is machine- and
