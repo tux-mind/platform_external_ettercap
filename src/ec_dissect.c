@@ -43,9 +43,9 @@ void dissect_del(char *name);
 int dissect_modify(int mode, char *name, u_int32 port);
 
 int dissect_match(void *id_sess, void *id_curr);
-void dissect_create_session(struct ec_session **s, struct packet_object *po, u_int64 code);
-size_t dissect_create_ident(void **i, struct packet_object *po, u_int64 code);            
-void dissect_wipe_session(struct packet_object *po, u_int64 code);
+void dissect_create_session(struct ec_session **s, struct packet_object *po, ec_code_t code);
+size_t dissect_create_ident(void **i, struct packet_object *po, ec_code_t code);            
+void dissect_wipe_session(struct packet_object *po, ec_code_t code);
 
 int dissect_on_port(char *name, u_int16 port);
 
@@ -100,7 +100,7 @@ int dissect_match(void *id_sess, void *id_curr)
  * for a dissector.
  */
 
-void dissect_create_session(struct ec_session **s, struct packet_object *po, u_int64 code)
+void dissect_create_session(struct ec_session **s, struct packet_object *po, ec_code_t code)
 {
    void *ident;
 
@@ -123,7 +123,7 @@ void dissect_create_session(struct ec_session **s, struct packet_object *po, u_i
  * create the ident for a session
  */
 
-size_t dissect_create_ident(void **i, struct packet_object *po, u_int64 code)
+size_t dissect_create_ident(void **i, struct packet_object *po, ec_code_t code)
 {
    struct dissect_ident *ident;
    
@@ -152,7 +152,7 @@ size_t dissect_create_ident(void **i, struct packet_object *po, u_int64 code)
 /*
  * totally destroy the session bound to this connection
  */
-void dissect_wipe_session(struct packet_object *po, u_int64 code)
+void dissect_wipe_session(struct packet_object *po, ec_code_t code)
 {
    void *ident;
    struct ec_session *s;   

@@ -7,10 +7,18 @@
 #include <ec_session.h>
 #include <ec_decode.h>
 
+#if OS_SIZEOF_P == 8
+typedef u_int64 ec_code_t;
+#elif OS_SIZEOF_P == 4
+typedef u_int32 ec_code_t;
+#else
+#error OS_SIZEOF_P undefined, please define it to the size of void pointer on your machine
+#endif
+
 /* session identifier */
 
 struct dissect_ident {
-   u_int64 magic;
+   ec_code_t magic;
    struct ip_addr L3_src;
    struct ip_addr L3_dst;
    u_int16 L4_src;
@@ -20,7 +28,8 @@ struct dissect_ident {
 
 #define DISSECT_IDENT_LEN sizeof(struct dissect_ident)
 
-#define DISSECT_CODE(x) (u_int64)(&x)
+
+#define DISSECT_CODE(x) (ec_code_t)(&x)
 
 /* exported functions */
 
@@ -30,9 +39,9 @@ EC_API_EXTERN int dissect_modify(int mode, char *name, u_int32 port);
 #define MODE_REP  1
 
 EC_API_EXTERN int dissect_match(void *id_sess, void *id_curr);
-EC_API_EXTERN void dissect_create_session(struct ec_session **s, struct packet_object *po, u_int64 code); 
-EC_API_EXTERN void dissect_wipe_session(struct packet_object *po, u_int64 code);
-EC_API_EXTERN size_t dissect_create_ident(void **i, struct packet_object *po, u_int64 code); 
+EC_API_EXTERN void dissect_create_session(struct ec_session **s, struct packet_object *po, ec_code_t code); 
+EC_API_EXTERN void dissect_wipe_session(struct packet_object *po, ec_code_t code);
+EC_API_EXTERN size_t dissect_create_ident(void **i, struct packet_object *po, ec_code_t code); 
 
 EC_API_EXTERN int dissect_on_port(char *name, u_int16 port);
 EC_API_EXTERN int dissect_on_port_level(char *name, u_int16 port, u_int8 level);
