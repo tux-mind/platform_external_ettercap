@@ -1,11 +1,13 @@
 
-/* $Id: ec_threads.h,v 1.11 2004/11/05 14:11:52 alor Exp $ */
 
 #ifndef EC_THREADS_H
 #define EC_THREADS_H
 
 #include <ec_stdint.h>
 #include <pthread.h>
+#if defined(ANDROID) || defined(__BIONIC__)
+# include <bthread.h>
+#endif
 
 struct ec_thread {
    char *name;

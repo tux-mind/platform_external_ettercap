@@ -24,6 +24,10 @@
 
 #include <stdarg.h>
 #include <pthread.h>
+#if defined(ANDROID) || defined(__BIONIC__)
+# include <bthread.h>
+#endif
+
 
 /* globals */
 
