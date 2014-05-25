@@ -1,5 +1,4 @@
 
-/* $Id: ec_log.h,v 1.23 2004/07/24 10:43:21 alor Exp $ */
 
 #ifndef EC_LOG_H
 #define EC_LOG_H
@@ -87,7 +86,7 @@ struct log_header_packet {
  *
  * [header][user][pass][info][banner][header][user][pass]....
  *
- * every header contains in the structur "variable" the lenght
+ * every header contains in the structure "variable" the length
  * of the successive banner, user, pass and info fields.
  */
 struct log_header_info {
@@ -107,7 +106,7 @@ struct log_header_info {
    
    u_char fingerprint[FINGER_LEN+1];
 
-   /* account informations */
+   /* account information */
    u_int8 failed;
    struct ip_addr client;
 
@@ -131,6 +130,7 @@ EC_API_EXTERN int set_msg_loglevel(int level, char *filename);
 
 EC_API_EXTERN int log_open(struct log_fd *fd, char *filename);
 EC_API_EXTERN void log_close(struct log_fd *fd);
+EC_API_EXTERN void log_stop(void);
 EC_API_EXTERN int log_write_header(struct log_fd *fd, int type);
 EC_API_EXTERN void log_write_packet(struct log_fd *fd, struct packet_object *po);
 EC_API_EXTERN void log_write_info(struct log_fd *fd, struct packet_object *po);

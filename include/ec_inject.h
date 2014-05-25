@@ -1,5 +1,4 @@
 
-/* $Id: ec_inject.h,v 1.11 2004/07/24 10:43:21 alor Exp $ */
 
 #ifndef EC_INJECT_H
 #define EC_INJECT_H
@@ -18,7 +17,7 @@
    y->session = x;                  \
 } while(0)
 
-#define SESSION_CLEAR(x) x->session=NULL
+#define SESSION_CLEAR(x) (x->session=NULL)
 
 #define EXECUTE_INJECTOR(x,y) do{                     \
    FUNC_INJECTOR_PTR(prev_injector);                  \

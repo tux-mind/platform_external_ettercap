@@ -1,5 +1,4 @@
 
-/* $Id: ec_decode.h,v 1.17 2004/09/02 13:17:41 alor Exp $ */
 
 #ifndef EC_DECODE_H
 #define EC_DECODE_H
@@ -15,6 +14,7 @@ enum {
    IFACE_LAYER  = 1,
    LINK_LAYER   = 2,
    NET_LAYER    = 3,
+   NET6_LAYER   = 31,      /* IPv6 options */
    PROTO_LAYER  = 4,
    APP_LAYER    = 5,       /* special case for the middleware decoder. don't use it */
    APP_LAYER_TCP = 51,
@@ -48,8 +48,7 @@ enum {
 EC_API_EXTERN void ec_decode(u_char *u, const struct pcap_pkthdr *pkthdr, const u_char *pkt);
 EC_API_EXTERN void add_decoder(u_int8 level, u_int32 type, FUNC_DECODER_PTR(decoder));
 EC_API_EXTERN void del_decoder(u_int8 level, u_int32 type);
-EC_API_EXTERN void * get_decoder(u_int8 level, u_int32 type);
-
+EC_API_EXTERN void *get_decoder(u_int8 level, u_int32 type);
 
 #endif
 

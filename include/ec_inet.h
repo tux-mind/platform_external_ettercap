@@ -1,8 +1,9 @@
 
-/* $Id: ec_inet.h,v 1.26 2004/07/24 10:43:21 alor Exp $ */
 
 #ifndef EC_INET_H
 #define EC_INET_H
+
+#include <ec_queue.h>
 
 #ifdef OS_WINDOWS
    #include <winsock2.h>
@@ -23,24 +24,25 @@
    #endif
 #endif
 
-enum {
-   NS_IN6ADDRSZ            = 16,
-   NS_INT16SZ              = 2,
-
-   ETH_ADDR_LEN            = 6,
-   TR_ADDR_LEN             = 6,
-   FDDI_ADDR_LEN           = 6,
-   MEDIA_ADDR_LEN          = 6,
+#define	ETH_ADDR_LEN 6
+#define	TR_ADDR_LEN 6
+#define	FDDI_ADDR_LEN 6
+#define	MEDIA_ADDR_LEN 6
    
-   IP_ADDR_LEN             = 4,
-   IP6_ADDR_LEN            = 16,
-   MAX_IP_ADDR_LEN         = IP6_ADDR_LEN,
+#define	IP_ADDR_LEN 4
+#define	IP6_ADDR_LEN 16
+#define	MAX_IP_ADDR_LEN IP6_ADDR_LEN
 
-   ETH_ASCII_ADDR_LEN      = sizeof("ff:ff:ff:ff:ff:ff")+1,
-   IP_ASCII_ADDR_LEN       = sizeof("255.255.255.255")+1,
-   IP6_ASCII_ADDR_LEN      = sizeof("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255")+1,
-   MAX_ASCII_ADDR_LEN      = IP6_ASCII_ADDR_LEN,                  
-};
+#define	ETH_ASCII_ADDR_LEN 19 // sizeof("ff:ff:ff:ff:ff:ff")+1
+#define	IP_ASCII_ADDR_LEN 17 // sizeof("255.255.255.255")+1
+#define	IP6_ASCII_ADDR_LEN 47 // sizeof("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255")+1
+#define	MAX_ASCII_ADDR_LEN IP6_ASCII_ADDR_LEN
+
+/*
+ * Some predefined addresses here
+ */
+#define IP6_ALL_NODES "\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01"
+#define IP6_ALL_ROUTERS "\xff\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02"
 
 /* 
  * this structure is used by ettercap to handle 
@@ -53,17 +55,32 @@ struct ip_addr {
    u_int8 addr[MAX_IP_ADDR_LEN];
 };
 
+struct net_list {
+   struct ip_addr ip;
+   struct ip_addr netmask;
+   struct ip_addr network;
+   u_int8 prefix;
+   LIST_ENTRY(net_list) next;
+};
+
 EC_API_EXTERN int ip_addr_init(struct ip_addr *sa, u_int16 type, u_char *addr);
 EC_API_EXTERN int ip_addr_cpy(u_char *addr, struct ip_addr *sa);
 EC_API_EXTERN int ip_addr_cmp(struct ip_addr *sa, struct ip_addr *sb);
 EC_API_EXTERN int ip_addr_null(struct ip_addr *sa);
 EC_API_EXTERN int ip_addr_is_zero(struct ip_addr *sa);
+EC_API_EXTERN int ip_addr_random(struct ip_addr* ip, u_int16 type);
 
 EC_API_EXTERN char *ip_addr_ntoa(struct ip_addr *sa, char *dst);
+EC_API_EXTERN int ip_addr_pton(char *str, struct ip_addr *addr);
 EC_API_EXTERN char *mac_addr_ntoa(u_char *mac, char *dst);
 EC_API_EXTERN int mac_addr_aton(char *str, u_char *mac);
 
-EC_API_EXTERN int ip_addr_is_local(struct ip_addr *sa);
+EC_API_EXTERN int ip_addr_is_local(struct ip_addr *sa, struct ip_addr *ifaddr);
+EC_API_EXTERN int ip_addr_is_multicast(struct ip_addr *ip);
+EC_API_EXTERN int ip_addr_is_broadcast(struct ip_addr *sa, struct ip_addr *ifaddr);
+EC_API_EXTERN int ip_addr_is_ours(struct ip_addr *ip);
+EC_API_EXTERN int ip_addr_get_network(struct ip_addr*, struct ip_addr*, struct ip_addr*);
+EC_API_EXTERN int ip_addr_get_prefix(struct ip_addr* netmask);
 
 /*
  * this prototypes are implemented in ./os/.../
@@ -72,6 +89,10 @@ EC_API_EXTERN int ip_addr_is_local(struct ip_addr *sa);
 
 EC_API_EXTERN void disable_ip_forward(void);
 EC_API_EXTERN u_int16 get_iface_mtu(const char *iface);
+
+#ifdef OS_LINUX
+EC_API_EXTERN void disable_interface_offload(void);
+#endif
 
 /********************/
 

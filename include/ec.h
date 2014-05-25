@@ -1,17 +1,15 @@
 
-/* $Id: ec.h,v 1.30 2004/09/30 16:01:45 alor Exp $ */
 
 #ifndef EC_H
 #define EC_H
 
-#ifdef HAVE_CONFIG_H
-   #include <config.h>
-#endif
+#include <config.h>
 
 #include <sys/types.h>
 #include <sys/time.h>
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #ifdef OS_WINDOWS
@@ -66,6 +64,11 @@
    ON_ERROR(x, NULL, "virtual memory exhausted"); \
 } while(0)
 
+#define SAFE_MALLOC(x, s) do { \
+   x = malloc(s); \
+   ON_ERROR(x, NULL, "virtual memory exhausted"); \
+} while (0)
+
 #define SAFE_REALLOC(x, s) do { \
    x = realloc(x, s); \
    ON_ERROR(x, NULL, "virtual memory exhausted"); \
@@ -78,7 +81,18 @@
 
 #define SAFE_FREE(x) do{ if(x) { free(x); x = NULL; } }while(0)
 
-#define __init __attribute__ ((constructor))
+
+/* convert to string */
+#define EC_STRINGIFY(in) #in
+#define EC_TOSTRING(in) EC_STRINGIFY(in)
+
+#ifdef OS_LINUX
+#define __init       __attribute__((constructor(101)))
+#define __init_last  __attribute__((constructor(200))
+#else
+#define __init __attribute__((constructor))
+#define __init_last __init
+#endif
 
 #ifndef __set_errno
 #define __set_errno(e) (errno = (e))
@@ -87,6 +101,14 @@
 #define LOOP for(;;)
 
 #define EXECUTE(x, ...) do{ if(x != NULL) x( __VA_ARGS__ ); }while(0)
+
+/* couple of useful macros */
+#ifndef offsetof
+#define offsetof(type, member) ((size_t) &((type*)0)->member)
+#endif
+#ifndef containerof
+#define containerof(ptr, type, member) ((type*)((char*)ptr - offsetof(type,member)))
+#endif
 
 /* min and max */
 
@@ -137,9 +159,15 @@
 
 /* magic numbers */
 
-#define EC_MAGIC_8   0xec
-#define EC_MAGIC_16  0xe77e
-#define EC_MAGIC_32  0xe77ee77e
+#ifndef RANDMAGIC
+   #define EC_MAGIC_8   0xec
+   #define EC_MAGIC_16  0xe77e
+   #define EC_MAGIC_32  0xe77ee77e
+#else
+   #define EC_MAGIC_8   ((RANDMAGIC & 0x0ff0) >> 4)
+   #define EC_MAGIC_16  (RANDMAGIC & 0xffff)
+   #define EC_MAGIC_32  (((RANDMAGIC & 0xff) << 8)|((RANDMAGIC & 0xff00) >> 8)|(RANDMAGIC & 0xffff0000))
+#endif
 
 /* exported by ec_main */
 EC_API_EXTERN void clean_exit(int errcode);

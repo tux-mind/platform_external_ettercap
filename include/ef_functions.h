@@ -1,5 +1,4 @@
 
-/* $Id: ef_functions.h,v 1.19 2004/07/24 10:43:21 alor Exp $ */
 
 #ifndef EF_FUNCTIONS_H
 #define EF_FUNCTIONS_H
@@ -10,9 +9,9 @@
 
 #define WARNING(x) do {                   \
 if (!GBL_OPTIONS.suppress_warnings)       \
-   FATAL_ERROR("\n[%s:%ld]: WARINING "x, GBL_OPTIONS.source_file, (unsigned long)GBL.lineno);  \
+   FATAL_ERROR("\n[%s:%ld]: WARNING "x, GBL_OPTIONS.source_file, (unsigned long)GBL.lineno);  \
 else                                      \
-   fprintf(stderr, "\n[%s:%ld]: WARINING "x, GBL_OPTIONS.source_file, (unsigned long)GBL.lineno);  \
+   fprintf(stderr, "\n[%s:%ld]: WARNING "x, GBL_OPTIONS.source_file, (unsigned long)GBL.lineno);  \
 } while(0)
 
 /* ef_main */

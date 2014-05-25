@@ -1,5 +1,4 @@
 
-/* $Id: ec_error.h,v 1.17 2004/07/23 07:25:27 alor Exp $ */
 
 #ifndef EC_ERROR_H
 #define EC_ERROR_H
@@ -15,14 +14,20 @@ enum {
    ENOADDRESS  = 5,
    EDUPLICATE  = 6,
    ETIMEOUT    = 7,
+   EINITFAIL   = 8,
+   EFOUND      = 128,
+   EBRIDGE     = 129,
    EVERSION    = 254,
    EFATAL      = 255,
 };
 
 EC_API_EXTERN void error_msg(char *file, const char *function, int line, char *message, ...);
+EC_API_EXTERN void warn_msg(char *file, const char *function, int line, char *message, ...);
 EC_API_EXTERN void fatal_error(char *message, ...);
 EC_API_EXTERN void bug(char *file, const char *function, int line, char *message);
 
+
+#define WARN_MSG(x, ...) warn_msg(__FILE__, __FUNCTION__, __LINE__, x, ## __VA_ARGS__ )
 #define ERROR_MSG(x, ...) error_msg(__FILE__, __FUNCTION__, __LINE__, x, ## __VA_ARGS__ )
 
 #define FATAL_ERROR(x, ...) do { fatal_error(x, ## __VA_ARGS__ ); } while(0)

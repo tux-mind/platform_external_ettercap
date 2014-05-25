@@ -1,5 +1,4 @@
 
-/* $Id: el_functions.h,v 1.23 2004/11/04 09:23:03 alor Exp $ */
 
 #ifndef EL_FUNCTIONS_H
 #define EL_FUNCTIONS_H
@@ -70,7 +69,7 @@ struct stream_object {
 
 EL_API_EXTERN void stream_init(struct stream_object *so);
 EL_API_EXTERN int stream_add(struct stream_object *so, struct log_header_packet *pck, char *buf);
-EL_API_EXTERN struct so_list * stream_search(struct stream_object *so, u_char *buf, size_t buflen, int mode);
+EL_API_EXTERN struct so_list * stream_search(struct stream_object *so, const char *buf, size_t buflen, int mode);
 EL_API_EXTERN int stream_read(struct stream_object *so, u_char *buf, size_t size, int mode);
    #define STREAM_SIDE1 0
    #define STREAM_SIDE2 ~0

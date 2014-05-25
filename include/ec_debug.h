@@ -1,5 +1,4 @@
 
-/* $Id: ec_debug.h,v 1.9 2004/07/24 10:43:21 alor Exp $ */
 
 #if defined (DEBUG) && !defined(EC_DEBUG_H)
 #define EC_DEBUG_H
@@ -12,7 +11,7 @@ EC_API_EXTERN FILE *debug_file;
 #define DEBUG_INIT() debug_init()
 #define DEBUG_MSG(x, ...) do {                                 \
    if (debug_file == NULL) {                                   \
-      fprintf(stderr, "DEBUG: "x"\n", ## __VA_ARGS__ );            \
+      fprintf(stderr, "DEBUG: "x"\n", ## __VA_ARGS__ );        \
    } else                                                      \
       debug_msg(x, ## __VA_ARGS__ );                           \
 } while(0)

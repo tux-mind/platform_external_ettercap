@@ -1,5 +1,4 @@
 
-/* $Id: ec_fingerprint.h,v 1.9 2004/07/24 10:43:21 alor Exp $ */
 
 #ifndef EC_FINGERPRINT_H
 #define EC_FINGERPRINT_H
@@ -9,7 +8,7 @@ EC_API_EXTERN int fingerprint_search(const char *f, char *dst);
 EC_API_EXTERN void fingerprint_default(char *finger);
 EC_API_EXTERN void fingerprint_push(char *finger, int param, int value);
 EC_API_EXTERN u_int8 TTL_PREDICTOR(u_int8 x);
-EC_API_EXTERN int fingerprint_submit(char *finger, char *os);
+EC_API_EXTERN int fingerprint_submit(const char *finger, char *os);
 
 
 /*

@@ -1,5 +1,4 @@
 
-/* $Id: ec_conntrack.h,v 1.14 2004/07/24 10:43:21 alor Exp $ */
 
 #ifndef EC_CONNTRACK_H
 #define EC_CONNTRACK_H
@@ -36,7 +35,9 @@ struct conn_object {
    struct conn_buf data;
 
    /* byte count since the creation */
-   u_int32 xferred;
+   u_int32 xferred;  /* XXX: remove it some day */
+   u_int32 tx;       /* from 1 to 2 */
+   u_int32 rx;       /* from 2 to 1 */
    
    /* connection status */
    int status;
