@@ -5,7 +5,8 @@ ettercap_pl_includes := \
 	external/libpcre\
 	external/libpcap\
 	external/libnet/libnet/include\
-	external/libbthread
+	external/libbthread\
+	external/libcurl/include
 	
 
 include $(call all-subdir-makefiles)

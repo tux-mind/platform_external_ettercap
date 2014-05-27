@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: reply_arp.c,v 1.3 2004/01/18 19:30:31 alor Exp $
 */
 
 
@@ -37,17 +36,17 @@ static void parse_arp(struct packet_object *po);
 /* plugin operations */
 struct plugin_ops reply_arp_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "reply_arp",  
+   .name =              "reply_arp",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Simple arp responder",  
+   .info =              "Simple arp responder",  
    /* the plugin version. */ 
-   version:          "1.0",   
+   .version =           "1.0",   
    /* activation function */
-   init:             &reply_arp_init,
+   .init =              &reply_arp_init,
    /* deactivation function */                     
-   fini:             &reply_arp_fini,
+   .fini =              &reply_arp_fini,
 };
 
 /**********************************************************/

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: autoadd.c,v 1.6 2004/10/25 20:35:15 alor Exp $
 */
 
 
@@ -39,17 +38,17 @@ static int add_to_victims(void *group, struct packet_object *po);
 
 struct plugin_ops autoadd_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "autoadd",  
+   .name =              "autoadd",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Automatically add new victims in the target range",  
+   .info =              "Automatically add new victims in the target range",  
    /* the plugin version. */ 
-   version:          "1.2",   
+   .version =           "1.2",   
    /* activation function */
-   init:             &autoadd_init,
+   .init =              &autoadd_init,
    /* deactivation function */                     
-   fini:             &autoadd_fini,
+   .fini =              &autoadd_fini,
 };
 
 /**********************************************************/

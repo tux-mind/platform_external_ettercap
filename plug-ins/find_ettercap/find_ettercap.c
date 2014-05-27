@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: find_ettercap.c,v 1.5 2004/06/25 14:24:28 alor Exp $
 */
 
 
@@ -44,17 +43,17 @@ static void parse_tcp(struct packet_object *po);
 
 struct plugin_ops find_ettercap_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "find_ettercap",  
+   .name =              "find_ettercap",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Try to find ettercap activity",  
+   .info =              "Try to find ettercap activity",  
    /* the plugin version. */ 
-   version:          "2.0",   
+   .version =           "2.0",   
    /* activation function */
-   init:             &find_ettercap_init,
+   .init =              &find_ettercap_init,
    /* deactivation function */                     
-   fini:             &find_ettercap_fini,
+   .fini =              &find_ettercap_fini,
 };
 
 /**********************************************************/
@@ -149,7 +148,7 @@ static void parse_tcp(struct packet_object *po)
    }
 
    if (ntohs(tcp->th_sport) == EC_MAGIC_16 && (tcp->th_flags & TH_SYN) )
-      USER_MSG("ettercap NG plugin (gw_discover) is trying to dicover the gateway from %s...\n", ip_addr_ntoa(&po->L3.src, tmp));
+      USER_MSG("ettercap NG plugin (gw_discover) is trying to discover the gateway from %s...\n", ip_addr_ntoa(&po->L3.src, tmp));
    
 }
 

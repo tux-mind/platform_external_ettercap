@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: stp_mangler.c,v 1.3 2004/11/04 09:23:03 alor Exp $
 */
 
 
@@ -77,17 +76,17 @@ EC_THREAD_FUNC(mangler);
 
 struct plugin_ops stp_mangler_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "stp_mangler",  
+   .name =              "stp_mangler",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Become root of a switches spanning tree",  
+   .info =              "Become root of a switches spanning tree",  
    /* the plugin version. */ 
-   version:          "1.0",   
+   .version =           "1.0",   
    /* activation function */
-   init:             &stp_mangler_init,
+   .init =              &stp_mangler_init,
    /* deactivation function */                     
-   fini:             &stp_mangler_fini,
+   .fini =              &stp_mangler_fini,
 };
 
 /**********************************************************/
@@ -163,7 +162,7 @@ EC_THREAD_FUNC(mangler)
    hstp->hello_time = htons_inv(2);
    hstp->forward_delay = htons_inv(15);
 
-   packet_create_object(&fake_po, fake_pck, FAKE_PCK_LEN);
+   packet_create_object(&fake_po, (u_char*)fake_pck, FAKE_PCK_LEN);
 
    /* init the thread and wait for start up */
    ec_thread_init();

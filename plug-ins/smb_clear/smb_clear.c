@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: smb_clear.c,v 1.1 2003/10/16 16:46:48 alor Exp $
 */
 
 
@@ -55,17 +54,17 @@ static void parse_smb(struct packet_object *po);
 
 struct plugin_ops smb_clear_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "smb_clear",  
+   .name =              "smb_clear",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Tries to force SMB cleartext auth",  
+   .info =              "Tries to force SMB cleartext auth",  
    /* the plugin version. */ 
-   version:          "1.0",   
+   .version =           "1.0",   
    /* activation function */
-   init:             &smb_clear_init,
+   .init =              &smb_clear_init,
    /* deactivation function */                     
-   fini:             &smb_clear_fini,
+   .fini =              &smb_clear_fini,
 };
 
 /**********************************************************/
@@ -111,7 +110,7 @@ static void parse_smb(struct packet_object *po)
    u_char *ptr;
    char tmp[MAX_ASCII_ADDR_LEN];
    
-   /* It's unuseful to modify packets that won't be forwarded */
+   /* It is pointless to modify packets that won't be forwarded */
    if (!(po->flags & PO_FORWARDABLE)) 
       return; 
       

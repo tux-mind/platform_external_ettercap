@@ -19,7 +19,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: finger.c,v 1.12 2004/06/25 14:24:28 alor Exp $
 */
 
 
@@ -53,17 +52,17 @@ static void do_fingerprint(void);
 
 struct plugin_ops finger_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "finger",  
+   .name =              "finger",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Fingerprint a remote host",  
+   .info =              "Fingerprint a remote host",  
    /* the plugin version. */ 
-   version:          "1.6",   
+   .version =           "1.6",   
    /* activation function */
-   init:             &finger_init,
+   .init =              &finger_init,
    /* deactivation function */                     
-   fini:             &finger_fini,
+   .fini =              &finger_fini,
 };
 
 /**********************************************************/
@@ -143,7 +142,7 @@ static void get_finger(struct packet_object *po)
 /*
  * check if we can use GBL_TARGETS
  */
-static int good_target(struct ip_addr *ip, u_int16 *port)
+static int good_target(struct ip_addr *p_ip, u_int16 *p_port)
 {
    struct ip_list *host;
    
@@ -151,17 +150,17 @@ static int good_target(struct ip_addr *ip, u_int16 *port)
    if ((host = LIST_FIRST(&GBL_TARGET1->ips)) != NULL) {
       
       /* copy the ip address */
-      memcpy(ip, &host->ip, sizeof(struct ip_addr));
+      memcpy(p_ip, &host->ip, sizeof(struct ip_addr));
       
       /* find the port */
-      for (*port = 0; *port < 0xffff; (*port)++) {
-         if (BIT_TEST(GBL_TARGET1->ports, *port)) {
+      for (*p_port = 0; *p_port < 0xffff; (*p_port)++) {
+         if (BIT_TEST(GBL_TARGET1->ports, *p_port)) {
             break;
          }
       }
       
       /* port was found */
-      if (*port != 0xffff)
+      if (*p_port != 0xffff)
          return ESUCCESS;
    }
    
@@ -172,7 +171,7 @@ static int good_target(struct ip_addr *ip, u_int16 *port)
 /* 
  * get the target from user input 
  */
-static int get_user_target(struct ip_addr *ip, u_int16 *port)
+static int get_user_target(struct ip_addr *p_ip, u_int16 *p_port)
 {
    struct in_addr ipaddr;
    char input[24];
@@ -192,14 +191,14 @@ static int get_user_target(struct ip_addr *ip, u_int16 *port)
       if (inet_aton(p, &ipaddr) == 0)
          return -EINVALID;
 
-      ip_addr_init(ip, AF_INET, (char *)&ipaddr);
+      ip_addr_init(p_ip, AF_INET, (u_char *)&ipaddr);
 
       /* get the port */
       if ((p = ec_strtok(NULL, ":", &tok)) != NULL) {
-         *port = atoi(p);
+         *p_port = atoi(p);
 
          /* correct parsing */
-         if (*port != 0)
+         if (*p_port != 0)
             return ESUCCESS;
       }
    }

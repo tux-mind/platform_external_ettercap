@@ -19,7 +19,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: search_promisc.c,v 1.4 2003/11/10 12:15:31 lordnaga Exp $
 */
 
 
@@ -30,6 +29,7 @@
 #include <ec_send.h>
 
 #include <pthread.h>
+#include <time.h>
 
 /* globals */
 LIST_HEAD(, hosts_list) promisc_table;
@@ -50,17 +50,17 @@ static void parse_arp(struct packet_object *po);
 
 struct plugin_ops search_promisc_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "search_promisc",  
+   .name =              "search_promisc",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Search promisc NICs in the LAN",  
+   .info =              "Search promisc NICs in the LAN",  
    /* the plugin version. */ 
-   version:          "1.2",   
+   .version =           "1.2",   
    /* activation function */
-   init:             &search_promisc_init,
+   .init =              &search_promisc_init,
    /* deactivation function */                     
-   fini:             &search_promisc_fini,
+   .fini =              &search_promisc_fini,
 };
 
 /**********************************************************/
@@ -78,10 +78,15 @@ static int search_promisc_init(void *dummy)
    
    char tmp[MAX_ASCII_ADDR_LEN];
    struct hosts_list *h;
-   char bogus_mac[2][6]={"\xfd\xfd\x00\x00\x00\x00", "\xff\xff\x00\x00\x00\x00"};
+   u_char bogus_mac[2][6]={"\xfd\xfd\x00\x00\x00\x00", "\xff\xff\x00\x00\x00\x00"};
    char messages[2][48]={"\nLess probably sniffing NICs:\n", "\nMost probably sniffing NICs:\n"};
    u_char i;
-   
+ 
+#if !defined(OS_WINDOWS) 
+   struct timespec tm;
+   tm.tv_sec = GBL_CONF->arp_storm_delay;
+   tm.tv_nsec = 0; 
+#endif
    /* don't show packets while operating */
    GBL_OPTIONS->quiet = 1;
       
@@ -109,7 +114,11 @@ static int search_promisc_init(void *dummy)
        */
       LIST_FOREACH(h, &GBL_HOSTLIST, next) {
          send_arp(ARPOP_REQUEST, &GBL_IFACE->ip, GBL_IFACE->mac, &h->ip, bogus_mac[i]);   
-         usleep(GBL_CONF->arp_storm_delay * 1000);
+#if !defined(OS_WINDOWS)
+         nanosleep(&tm, NULL);
+#else
+         usleep(GBL_CONF->arp_storm_delay*1000);
+#endif
       }
       
       /* Wait for responses */

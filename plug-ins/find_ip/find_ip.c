@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: find_ip.c,v 1.2 2004/01/18 19:30:31 alor Exp $
 */
 
 
@@ -37,17 +36,17 @@ static struct ip_addr *search_targets(void);
 
 struct plugin_ops find_ip_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "find_ip",  
+   .name =              "find_ip",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Search an unused IP address in the subnet",  
+   .info =              "Search an unused IP address in the subnet",  
    /* the plugin version. */ 
-   version:          "1.0",   
+   .version =           "1.0",   
    /* activation function */
-   init:             &find_ip_init,
+   .init =              &find_ip_init,
    /* deactivation function */                     
-   fini:             &find_ip_fini,
+   .fini =              &find_ip_fini,
 };
 
 /**********************************************************/
@@ -129,7 +128,7 @@ static struct ip_addr *search_netmask(void)
    for (i = 1; i <= nhosts; i++) {
       /* calculate the ip */
       current = (myip & netmask) | htonl(i);
-      ip_addr_init(&scanip, AF_INET, (char *)&current);
+      ip_addr_init(&scanip, AF_INET, (u_char *)&current);
       if (!in_list(&scanip))
          return(&scanip);
    }

@@ -17,7 +17,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: pptp_reneg.c,v 1.1 2003/12/04 17:25:06 lordnaga Exp $
 */
 
 
@@ -59,17 +58,17 @@ static int found_in_list(struct packet_object *po);
 /* plugin operations */
 struct plugin_ops pptp_reneg_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "pptp_reneg",  
+   .name =              "pptp_reneg",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "PPTP: Forces tunnel re-negotiation",  
+   .info =              "PPTP: Forces tunnel re-negotiation",  
    /* the plugin version. */ 
-   version:          "1.0",   
+   .version =           "1.0",   
    /* activation function */
-   init:             &pptp_reneg_init,
+   .init =              &pptp_reneg_init,
    /* deactivation function */                     
-   fini:             &pptp_reneg_fini,
+   .fini =              &pptp_reneg_fini,
 };
 
 /**********************************************************/
@@ -124,7 +123,7 @@ static void parse_ppp(struct packet_object *po)
    struct ppp_header *ppp;
    char tmp[MAX_ASCII_ADDR_LEN];
    
-   /* It's unuseful to modify packets that won't be forwarded */
+   /* It is pointless to modify packets that won't be forwarded */
    if (!(po->flags & PO_FORWARDABLE)) 
       return; 
 

@@ -20,7 +20,6 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-    $Id: gw_discover.c,v 1.4 2004/06/25 14:24:28 alor Exp $
 */
 
 
@@ -49,17 +48,17 @@ static void get_replies(struct packet_object *po);
 
 struct plugin_ops gw_discover_ops = { 
    /* ettercap version MUST be the global EC_VERSION */
-   ettercap_version: EC_VERSION,                        
+   .ettercap_version =  EC_VERSION,                        
    /* the name of the plugin */
-   name:             "gw_discover",  
+   .name =              "gw_discover",  
     /* a short description of the plugin (max 50 chars) */                    
-   info:             "Try to find the LAN gateway",  
+   .info =              "Try to find the LAN gateway",  
    /* the plugin version. */ 
-   version:          "1.0",   
+   .version =           "1.0",   
    /* activation function */
-   init:             &gw_discover_init,
+   .init =              &gw_discover_init,
    /* deactivation function */                     
-   fini:             &gw_discover_fini,
+   .fini =              &gw_discover_fini,
 };
 
 /**********************************************************/
@@ -100,7 +99,7 @@ static int gw_discover_fini(void *dummy)
 /* 
  * get the remote ip from user input 
  */
-static int get_remote_target(struct ip_addr *ip, u_int16 *port)
+static int get_remote_target(struct ip_addr *p_ip, u_int16 *p_port)
 {
    struct in_addr ipaddr;
    char input[24];
@@ -120,14 +119,14 @@ static int get_remote_target(struct ip_addr *ip, u_int16 *port)
       if (inet_aton(p, &ipaddr) == 0)
          return -EINVALID;
 
-      ip_addr_init(ip, AF_INET, (char *)&ipaddr);
+      ip_addr_init(p_ip, AF_INET, (u_char *)&ipaddr);
 
       /* get the port */
       if ((p = ec_strtok(NULL, ":", &tok)) != NULL) {
-         *port = atoi(p);
+         *p_port = atoi(p);
 
          /* correct parsing */
-         if (*port != 0)
+         if (*p_port != 0)
             return ESUCCESS;
       }
    }
