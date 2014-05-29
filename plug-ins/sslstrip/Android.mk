@@ -10,7 +10,7 @@ LOCAL_C_INCLUDES := $(ettercap_pl_includes)
 
 LOCAL_SRC_FILES := sslstrip.c
 
-LOCAL_STATIC_LIBRARIES := libcurl
+LOCAL_STATIC_LIBRARIES := libcurl libprce
 
 LOCAL_MODULE := ec_sslstrip
 

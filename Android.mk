@@ -18,7 +18,7 @@ include $(CLEAR_VARS)
 LOCAL_CFLAGS += -O2 -g -DHAVE_CONFIG_H -DOPENSSL_NO_DEPRECATED -ffunction-sections\
 	-fdata-sections
 
-LOCAL_LDFLAGS += -lz -Wl,--gc-sections
+LOCAL_LDFLAGS += -rdynamic  -Wl,-export-dynamic -Wl,--no-gc-sections
 
 LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/include \
@@ -170,7 +170,8 @@ LOCAL_STATIC_LIBRARIES:= \
 	
 LOCAL_SHARED_LIBRARIES:= \
 	libssl\
-	libcrypto
+	libcrypto\
+	libz
 
 LOCAL_MODULE:= ettercap
 

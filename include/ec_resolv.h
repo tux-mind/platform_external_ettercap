@@ -46,7 +46,12 @@ EC_API_EXTERN int host_iptoa(struct ip_addr *ip, char *name);
 /* used by ec_dns to insert passively sniffed dns answers */
 EC_API_EXTERN void resolv_cache_insert(struct ip_addr *ip, char *name);
    
-
+#if (defined(ANDROID) || defined(__BIONIC__)) && !defined(dn_comp)
+/* Android expose system __dn_comp from KitKat, not before */
+#define dn_comp __dn_comp
+extern int dn_comp(const char*, u_char*, int, u_char**, u_char**);
+extern int dn_expand(const u_char*, const u_char*, const u_char*, char*, int);
+#endif
    
 #endif
 

@@ -222,7 +222,9 @@ void plugin_unload_all(void)
       p = SLIST_FIRST(&plugin_head);
       if(plugin_is_activated(p->ops->name) == 1)
 		plugin_fini(p->ops->name);
+#if !defined(ANDROID) && !defined(__BIONIC__)
       dlclose(p->handle);
+#endif
       SLIST_REMOVE_HEAD(&plugin_head, next);
       SAFE_FREE(p);
    }
