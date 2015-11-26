@@ -166,11 +166,11 @@ LOCAL_STATIC_LIBRARIES:= \
 	libpcre\
 	libexpat\
 	libbthread\
-	libifaddrs
+	libifaddrs\
+	libcrypto_static\
+	libssl
 	
 LOCAL_SHARED_LIBRARIES:= \
-	libssl\
-	libcrypto\
 	libz
 
 LOCAL_MODULE:= ettercap
