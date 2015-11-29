@@ -167,8 +167,8 @@ LOCAL_STATIC_LIBRARIES:= \
 	libexpat\
 	libbthread\
 	libifaddrs\
-	libcrypto_static\
-	libssl
+	libssl_static\
+	libcrypto_static
 	
 LOCAL_SHARED_LIBRARIES:= \
 	libz
